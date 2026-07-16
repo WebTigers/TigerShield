@@ -5,6 +5,18 @@ this project uses [SemVer](https://semver.org) with a `-beta` stability suffix.
 
 ## [Unreleased]
 
+## [0.4.0-beta] — 2026-07-16
+
+### Added
+- **Live Traffic view** (`/tigershield/admin/events`) — a server-side DataTables grid over the shield's
+  event log (time, IP, country, action, reason, route) with a search box and an action filter. Fixes the
+  dashboard widget's "View live traffic" link, which previously 404'd (the view didn't exist).
+- `Tigershield_Model_Event::datatable()` + a real `Tigershield_Service_Events::datatable` (was a stub).
+
+### Changed
+- The dashboard widget now renders in the platform's dashboard grid (tiger-core ≥ 0.10.0-beta) with
+  WordFence-style chrome — the whole card header is the drag handle, with a collapse toggle.
+
 ## [0.3.0-beta] — 2026-07-16
 
 ### Added

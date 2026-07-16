@@ -1,0 +1,94 @@
+<?php
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 WebTigers. Tiger™ and WebTigers™ are trademarks of WebTigers.
+/**
+ * TigerShield — Live Traffic. A server-side DataTables grid of the shield's event log
+ * (Tigershield_Service_Events::datatable over /api). Read-only for now; row actions (allow-list /
+ * block this IP) arrive with the CrowdSec allow/deny lists. Rendered in the admin shell per ADMIN.md.
+ */
+?>
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+        <h1 class="h3 mb-1"><i class="fa-solid fa-wave-square me-2 text-primary"></i>Live Traffic</h1>
+        <p class="text-body-secondary mb-0">Every request the shield flagged, throttled, challenged, or blocked. In <strong>learn mode</strong> these are logged as <em>observed</em> — nothing is blocked yet.</p>
+    </div>
+    <a href="/tigershield/admin/settings" class="btn btn-outline-secondary"><i class="fa-solid fa-gear me-2"></i>Settings</a>
+</div>
+
+<div class="card">
+    <div class="card-header bg-transparent">
+        <div class="row g-2 align-items-end">
+            <div class="col-6 col-sm-auto">
+                <label class="form-label small text-body-secondary mb-1" for="ts-filter-action">Action</label>
+                <select id="ts-filter-action" class="form-select form-select-sm">
+                    <option value="">All actions</option>
+                    <option value="observed">Observed (learn)</option>
+                    <option value="block">Blocked</option>
+                    <option value="captcha">Challenged</option>
+                    <option value="captcha_pass">Challenge passed</option>
+                    <option value="allow">Allowed</option>
+                </select>
+            </div>
+            <div class="col-auto ms-auto align-self-end">
+                <button type="button" id="ts-filter-clear" class="btn btn-sm btn-link text-decoration-none">Clear</button>
+            </div>
+        </div>
+    </div>
+    <div class="card-body">
+        <table id="ts-events-table" class="table table-hover align-middle w-100">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>IP</th>
+                    <th>Country</th>
+                    <th>Action</th>
+                    <th>Reason</th>
+                    <th>Route</th>
+                </tr>
+            </thead>
+        </table>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    if (typeof tigerDataTable !== 'function') { return; }
+    var $   = jQuery;
+    var esc = tigerDataTable.esc;
+    var BADGE = { block: 'danger', captcha: 'warning', captcha_pass: 'info', allow: 'success', observed: 'secondary' };
+    var LABEL = { block: 'Blocked', captcha: 'Challenged', captcha_pass: 'Passed', allow: 'Allowed', observed: 'Observed' };
+
+    var fAction = document.getElementById('ts-filter-action');
+
+    var table = tigerDataTable('#ts-events-table', {
+        service: { module: 'tigershield', service: 'events', action: 'datatable' },
+        order: [[0, 'desc']],
+        language: { search: '', searchPlaceholder: 'Search IP, reason, route…', emptyTable: 'No traffic recorded yet.' },
+        extraData: function () { return { action: fAction.value }; },
+        columns: [
+            { data: 'time', render: function (t, type) {
+                return type !== 'display' ? t : '<span class="text-nowrap text-body-secondary">' + esc(t) + '</span>';
+            } },
+            { data: 'ip', render: function (t, type) {
+                return type !== 'display' ? t : '<code>' + esc(t) + '</code>';
+            } },
+            { data: 'country', render: function (t, type) {
+                return type !== 'display' ? t : (t ? '<span class="badge text-bg-light text-uppercase">' + esc(t) + '</span>' : '<span class="text-body-secondary">—</span>');
+            } },
+            { data: 'action', render: function (t, type) {
+                if (type !== 'display') { return t; }
+                return '<span class="badge text-bg-' + (BADGE[t] || 'secondary') + '">' + esc(LABEL[t] || t || '—') + '</span>';
+            } },
+            { data: 'reason', render: function (t, type) {
+                return type !== 'display' ? t : (t ? esc(t) : '<span class="text-body-secondary">—</span>');
+            } },
+            { data: 'route', render: function (t, type) {
+                return type !== 'display' ? t : (t ? '<code class="text-body-secondary">' + esc(t) + '</code>' : '<span class="text-body-secondary">—</span>');
+            } }
+        ]
+    });
+
+    $('#ts-filter-action').on('change', function () { table.ajax.reload(); });
+    $('#ts-filter-clear').on('click', function () { fAction.value = ''; table.ajax.reload(); });
+});
+</script>

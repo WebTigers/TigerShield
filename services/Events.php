@@ -7,14 +7,34 @@
  */
 class Tigershield_Service_Events extends Tiger_Service_Service
 {
-    /** DataTables server-side grid of recent shield events. */
+    /** DataTables server-side grid of recent shield events (live traffic). */
     public function datatable(array $params): void
     {
         if (!$this->_isAdmin()) { $this->_error('core.api.error.not_allowed'); return; }
 
-        // TODO(phase 1): query tigershield_event with _dtParams()/_dtResponse() (WEBSERVICES.md §5),
-        // each row carrying can_allowlist/can_block flags. Scaffold returns an empty grid.
-        $dt = $this->_dtParams($params);
-        $this->_dtResponse($dt['draw'] ?? 0, 0, 0, []);
+        $dt      = $this->_dtParams($params);
+        $actions = ['observed', 'block', 'captcha', 'captcha_pass', 'allow'];
+        $data = (new Tigershield_Model_Event())->datatable([
+            'search'   => $dt['search'],
+            'action'   => in_array(($params['action'] ?? ''), $actions, true) ? (string) $params['action'] : '',
+            'orderCol' => isset($dt['order'][0]) ? $dt['order'][0]['column'] : -1,
+            'orderDir' => isset($dt['order'][0]) ? $dt['order'][0]['dir'] : '',
+            'offset'   => $dt['start'],
+            'limit'    => $dt['length'],
+        ]);
+
+        $rows = [];
+        foreach ($data['rows'] as $r) {
+            $rows[] = [
+                'time'    => substr((string) $r['created_at'], 0, 16),
+                'ip'      => (string) $r['ip'],
+                'country' => (string) $r['country'],
+                'action'  => (string) $r['action'],
+                'reason'  => (string) $r['reason'],
+                'route'   => (string) $r['route'],
+            ];
+        }
+
+        $this->_dtResponse($dt['draw'], $data['total'], $data['filtered'], $rows);
     }
 }

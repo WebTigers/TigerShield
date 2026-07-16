@@ -29,4 +29,62 @@ class Tigershield_Model_Event extends Tiger_Model_Table
             'ua'      => substr((string) ($data['ua'] ?? ''), 0, 255),
         ]);
     }
+
+    /** The columns the live-traffic grid can order by, in DataTables column order. */
+    private static $_orderCols = ['created_at', 'ip', 'country', 'action', 'reason', 'route'];
+
+    /**
+     * Server-side DataTables query for the live-traffic view. Returns ['rows','total','filtered'].
+     * Injection-safe (query builder + quoteInto); newest first by default.
+     *
+     * @param  array $o search, action (filter), orderCol, orderDir, offset, limit
+     * @return array{rows:array, total:int, filtered:int}
+     */
+    public function datatable(array $o)
+    {
+        $db     = $this->getAdapter();
+        $table  = $this->_name;
+        $search = trim((string) ($o['search'] ?? ''));
+        $action = (string) ($o['action'] ?? '');
+
+        // A fresh, deleted-excluding select with the given columns.
+        $base = function ($cols) use ($db, $table) {
+            return $db->select()->from($table, $cols)->where('deleted = ?', 0);
+        };
+        // Apply the search box across the visible columns (injection-safe via quoteInto).
+        $applySearch = function ($sel) use ($db, $search) {
+            if ($search !== '') {
+                $like = '%' . $search . '%';
+                $sel->where(
+                    $db->quoteInto('ip LIKE ?', $like) . ' OR ' . $db->quoteInto('country LIKE ?', $like) . ' OR '
+                    . $db->quoteInto('action LIKE ?', $like) . ' OR ' . $db->quoteInto('reason LIKE ?', $like) . ' OR '
+                    . $db->quoteInto('route LIKE ?', $like)
+                );
+            }
+            return $sel;
+        };
+
+        // Total = the working set defined by the toolbar (action) filter, before the search box.
+        $totalSel = $base([new Zend_Db_Expr('COUNT(*)')]);
+        if ($action !== '') { $totalSel->where('action = ?', $action); }
+        $total = (int) $db->fetchOne($totalSel);
+
+        // Filtered = the working set narrowed by the search box.
+        $filteredSel = $base([new Zend_Db_Expr('COUNT(*)')]);
+        if ($action !== '') { $filteredSel->where('action = ?', $action); }
+        $applySearch($filteredSel);
+        $filtered = (int) $db->fetchOne($filteredSel);
+
+        // The page of rows.
+        $oi  = (int) ($o['orderCol'] ?? -1);
+        $dir = strtolower((string) ($o['orderDir'] ?? 'desc')) === 'asc' ? 'ASC' : 'DESC';
+        $col = ($oi >= 0 && isset(self::$_orderCols[$oi])) ? self::$_orderCols[$oi] : 'created_at';
+
+        $rowsSel = $base(['event_id', 'ip', 'country', 'action', 'reason', 'route', 'created_at']);
+        if ($action !== '') { $rowsSel->where('action = ?', $action); }
+        $applySearch($rowsSel);
+        $rowsSel->order($col . ' ' . $dir)->limit((int) ($o['limit'] ?? 25), (int) ($o['offset'] ?? 0));
+
+        return ['rows' => $db->fetchAll($rowsSel), 'total' => $total, 'filtered' => $filtered];
+    }
 }
