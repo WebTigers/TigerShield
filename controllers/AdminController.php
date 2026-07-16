@@ -22,6 +22,10 @@ class Tigershield_AdminController extends Tiger_Controller_Admin_Action
         $this->view->crowdsec = class_exists('Tigershield_Service_Crowdsec')
             ? (new Tigershield_Service_Crowdsec())->status()
             : ['enabled' => false, 'registered' => false, 'enrolled' => false, 'last_sync' => 0, 'count' => 0, 'last_error' => ''];
+        $this->view->captcha = [
+            'available' => class_exists('Tigershield_Service_Challenge') && (new Tigershield_Service_Challenge())->available(),
+            'version'   => class_exists('Tiger_Recaptcha') ? Tiger_Recaptcha::version() : 'v2',
+        ];
     }
 
     /** Live traffic: a DataTables grid of recent shield events (rows load from Tigershield_Service_Events). */

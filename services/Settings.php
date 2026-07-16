@@ -24,6 +24,7 @@ class Tigershield_Service_Settings extends Tiger_Service_Service
                 'tiger.tigershield.ratelimit.enabled',
                 'tiger.tigershield.crowdsec.enabled',
                 'tiger.tigershield.crowdsec.contribute',
+                'tiger.tigershield.captcha.fallback',
                 'tiger.tigershield.waf.enabled',
                 'tiger.tigershield.waf.action',
             ];

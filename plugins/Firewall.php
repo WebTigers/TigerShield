@@ -23,6 +23,9 @@ class Tigershield_Plugin_Firewall extends Zend_Controller_Plugin_Abstract
             $ip = self::_clientIp($request);
             if ($ip === '' || self::_isAllowlisted($ip)) { return; }  // trusted → never gated
 
+            // A flagged visitor solving the captcha interstitial: verify up front, before deciding again.
+            if (self::_isChallengeSubmit($request)) { self::_handleChallenge($request, $ip); return; }
+
             $decision = self::_decide($ip, $request);                 // null (allow) | ['action','reason']
             if ($decision === null) { return; }
 
@@ -30,7 +33,7 @@ class Tigershield_Plugin_Firewall extends Zend_Controller_Plugin_Abstract
             if (self::_mode() !== 'enforce') { return; }              // off / learn → log only, never block
 
             if ($decision['action'] === 'captcha') {
-                self::_challenge($request, $ip);                       // phase 4 (no-op until then → allow)
+                self::_challenge($request, $ip);                       // interstitial (or fallback) — may exit
             } else {
                 self::_block($request, $ip, $decision['reason']);
             }
@@ -225,10 +228,103 @@ class Tigershield_Plugin_Firewall extends Zend_Controller_Plugin_Abstract
         } catch (Throwable $e) { /* logging must never break the gate */ }
     }
 
-    /** Render the reCAPTCHA interstitial and stop dispatch (phase 4). No-op for now → request allowed. */
+    /** Is this a POST of the captcha interstitial (a flagged visitor solving the challenge)? */
+    protected static function _isChallengeSubmit(Zend_Controller_Request_Abstract $request)
+    {
+        return strtoupper((string) $request->getMethod()) === 'POST'
+            && (string) $request->getPost('tigershield_challenge') === '1';
+    }
+
+    /**
+     * Verify a solved captcha. On success, issue the clearance cookie and 302 back to the visitor's
+     * destination — the next request carries the cookie and sails through. On failure, re-present the
+     * interstitial with a retry note. Fail-open: if the challenge engine is unavailable, just allow.
+     */
+    protected static function _handleChallenge(Zend_Controller_Request_Abstract $request, $ip)
+    {
+        if (!class_exists('Tigershield_Service_Challenge')) { return; }
+        $ch = new Tigershield_Service_Challenge();
+        if (!$ch->available()) { return; }                              // nothing to verify against → allow
+
+        $token  = (string) ($request->getPost('g-recaptcha-response') ?: $request->getPost('h-captcha-response'));
+        $return = self::_sanitizeReturn((string) $request->getPost('return'));
+        if ($ch->verify($token, $ip)) {
+            $ch->issueClearance($ip, $request);
+            self::_logEvent($ip, ['action' => 'captcha_pass', 'reason' => 'captcha solved'], $request);
+            self::_redirect($request, $return);                         // exits
+        }
+        // Wrong / missing solution — show the interstitial again with a note.
+        self::_sendChallenge($request, $ip, self::_challengeAction($request), $return, 'That didn\'t verify — please try again.');
+    }
+
+    /**
+     * A `captcha` verdict reached enforce: present the interstitial (unless already cleared, or the
+     * engine isn't configured — then fall back per policy). Stops dispatch.
+     */
     protected static function _challenge(Zend_Controller_Request_Abstract $request, $ip)
     {
-        // TODO(phase 4): show the challenge page; a pass sets a short-lived clear-token for this IP.
+        if (!class_exists('Tigershield_Service_Challenge')) { return; }   // fail-open
+        $ch = new Tigershield_Service_Challenge();
+
+        if ($ch->hasClearance($ip, $request)) { return; }                // already proved human → allow
+
+        if (!$ch->available()) {                                          // no captcha configured
+            if (self::_config('captcha.fallback', 'allow') === 'block') {
+                self::_block($request, $ip, 'suspicious activity');
+            }
+            return;                                                      // fallback allow (logged already)
+        }
+        self::_sendChallenge($request, $ip, self::_challengeAction($request), self::_currentUrl($request), null);
+    }
+
+    /** Emit the interstitial page (200) and stop the request. */
+    protected static function _sendChallenge(Zend_Controller_Request_Abstract $request, $ip, $actionUrl, $returnUrl, $error)
+    {
+        $ch   = new Tigershield_Service_Challenge();
+        $html = $ch->interstitial($actionUrl, $returnUrl, $error);
+        $response = Zend_Controller_Front::getInstance()->getResponse();
+        $response->clearBody();
+        $response->setHttpResponseCode(200);
+        $response->setHeader('Content-Type', 'text/html; charset=utf-8', true);
+        $response->setHeader('X-TigerShield', 'challenge', true);
+        $response->setHeader('Cache-Control', 'no-store', true);
+        $response->setBody($html);
+        $response->sendResponse();
+        $request->setDispatched(true);
+        exit;
+    }
+
+    /** 302 to a local path and stop. */
+    protected static function _redirect(Zend_Controller_Request_Abstract $request, $to)
+    {
+        $response = Zend_Controller_Front::getInstance()->getResponse();
+        $response->clearBody();
+        $response->setHttpResponseCode(302);
+        $response->setHeader('Location', $to, true);
+        $response->sendResponse();
+        $request->setDispatched(true);
+        exit;
+    }
+
+    /** The path the interstitial form posts to (the current path — the gate intercepts it either way). */
+    protected static function _challengeAction(Zend_Controller_Request_Abstract $request)
+    {
+        return self::_currentUrl($request);
+    }
+
+    /** The current request's local path+query, for round-tripping the visitor back after they solve. */
+    protected static function _currentUrl(Zend_Controller_Request_Abstract $request)
+    {
+        return self::_sanitizeReturn(method_exists($request, 'getRequestUri') ? (string) $request->getRequestUri() : '/');
+    }
+
+    /** Only allow a same-site path (leading single slash) as a redirect target — no open redirect. */
+    protected static function _sanitizeReturn($url)
+    {
+        $url = (string) $url;
+        if ($url === '' || $url[0] !== '/' || (isset($url[1]) && $url[1] === '/')) { return '/'; }
+        if (strpos($url, "\n") !== false || strpos($url, "\r") !== false) { return '/'; }   // header-injection guard
+        return $url;
     }
 
     /**

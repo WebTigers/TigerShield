@@ -111,6 +111,26 @@ $cs   = isset($this->crowdsec) && is_array($this->crowdsec) ? $this->crowdsec : 
                 </div>
             </div>
         </div>
+
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header fw-semibold"><i class="fa-solid fa-user-check me-2"></i>Captcha gating</div>
+                <div class="card-body">
+                    <?php $cap = isset($this->captcha) && is_array($this->captcha) ? $this->captcha : []; ?>
+                    <?php if (!empty($cap['available'])): ?>
+                    <p class="small mb-2"><i class="fa-solid fa-circle-check text-success me-1"></i>reCAPTCHA <?= htmlspecialchars($cap['version'] ?? 'v2') ?> is configured — a <em>challenge</em> verdict shows an interstitial instead of a flat block.</p>
+                    <?php else: ?>
+                    <p class="small text-body-secondary mb-2"><i class="fa-solid fa-circle-info me-1"></i>No captcha provider configured. Set up <strong>reCAPTCHA</strong> (site + secret key) in the platform settings to gate suspicious visitors with a challenge instead of blocking them.</p>
+                    <?php endif; ?>
+                    <label class="form-label small">When no captcha is available, a challenge verdict should</label>
+                    <select name="tiger.tigershield.captcha.fallback" class="form-select form-select-sm">
+                        <?php $cf = $get('captcha.fallback', 'allow'); foreach (['allow' => 'Allow the request (fail open)', 'block' => 'Block the request'] as $v => $lbl): ?>
+                        <option value="<?= $v ?>" <?= $cf === $v ? 'selected' : '' ?>><?= $lbl ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </div>
+        </div>
     </div>
 </form>
 

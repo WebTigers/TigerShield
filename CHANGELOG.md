@@ -5,6 +5,23 @@ this project uses [SemVer](https://semver.org) with a `-beta` stability suffix.
 
 ## [Unreleased]
 
+## [0.3.0-beta] — 2026-07-16
+
+### Added
+- **Captcha gating (phase 4)** — `Tigershield_Service_Challenge`: a `captcha` verdict (CrowdSec
+  captcha-remediation, or `login.action = captcha`) now shows an **interstitial challenge** instead of a
+  flat block. Reuses Tiger's reCAPTCHA (v2 checkbox / v3 score); the gate presents the page, verifies the
+  solved POST up front, and 302s the visitor back to their destination.
+- **Signed clearance cookie** — a pass issues a short-lived, **HMAC-signed, IP-bound** cookie
+  (`tigershield_clear`, no server-side state) that the gate honors to skip re-challenging that browser
+  for a window (`captcha.window`, default 1h). Replay from another IP fails the signature.
+- **Admin Captcha card** — provider status + the no-provider fallback policy.
+
+### Security
+- Redirect target is restricted to same-site paths (open-redirect + CRLF guarded).
+- Fail-open: no provider configured → fall back per `captcha.fallback` (default allow); a reCAPTCHA
+  outage honors reCAPTCHA's own `fail_open`.
+
 ## [0.2.0-beta] — 2026-07-16
 
 ### Added
@@ -51,6 +68,7 @@ Initial public release: scaffold + the first protection engines.
 - **No CrowdSec SDK** — CAPI pull (blocklist) and push (`POST /signals`, contribute-back) are both plain
   REST via a built-in lightweight client. Keeps the shared-hosting footprint tiny and dependency-free.
 
-[Unreleased]: https://github.com/WebTigers/TigerShield/compare/v0.2.0-beta...HEAD
+[Unreleased]: https://github.com/WebTigers/TigerShield/compare/v0.3.0-beta...HEAD
+[0.3.0-beta]: https://github.com/WebTigers/TigerShield/compare/v0.2.0-beta...v0.3.0-beta
 [0.2.0-beta]: https://github.com/WebTigers/TigerShield/compare/v0.1.0-beta...v0.2.0-beta
 [0.1.0-beta]: https://github.com/WebTigers/TigerShield/releases/tag/v0.1.0-beta

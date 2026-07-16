@@ -137,16 +137,23 @@ change this — it's just another REST endpoint.
 
 ---
 
-## 6. Captcha gating (planned)
+## 6. Captcha gating (BUILT 2026-07-16)
 
 Blocking is blunt; a shared IP or a false-positive shouldn't 403 a real customer. So a `captcha`
-decision (from CrowdSec, a rate-limit trip, or a WAF "suspicious" match) shows an **interstitial
-challenge** instead:
+decision (from CrowdSec captcha-remediation, or `login.action = captcha`) shows an **interstitial
+challenge** instead — `Tigershield_Service_Challenge`, wired into the gate's `_challenge`:
 
-- Reuses Tiger's **reCAPTCHA** (`Tiger_Form_Element_Recaptcha` + `Tiger_Validate_Recaptcha`) — v2
-  checkbox or v3 score — config-driven, secret in `local.ini`. Pass → a short-lived **pass cookie/token**
-  clears the IP for a window; fail/absent → stay challenged.
-- Provider-agnostic seam so hCaptcha / Turnstile can slot in later (a `Tigershield_Challenge` interface).
+- Reuses Tiger's **reCAPTCHA** (`Tiger_Recaptcha`) — v2 checkbox or v3 score — config-driven
+  (`tiger.recaptcha.*`), secret in `local.ini`. The gate handles the whole flow inline (like `_block`):
+  present the interstitial → the visitor solves → the POST is verified up front in `routeStartup`.
+- On a pass, a short-lived **HMAC-signed, IP-bound clearance cookie** (`tigershield_clear`) is issued —
+  no server-side state, works on the barest host — and the visitor is 302'd back to their destination
+  (open-redirect + CRLF guarded). The gate skips the challenge for any request carrying a valid cookie.
+  A stolen cookie replayed from another IP fails the signature. Window is `captcha.window` (default 1h).
+- **Fail-open:** no provider configured → a `captcha` verdict falls back per `captcha.fallback`
+  (default `allow`); a reCAPTCHA transport outage honors reCAPTCHA's own `fail_open`.
+- Provider-agnostic seam: `Tigershield_Service_Challenge` (available / verify / interstitial) — hCaptcha
+  / Turnstile slot in behind the same three methods (the form already also reads `h-captcha-response`).
 
 ---
 
@@ -297,7 +304,10 @@ TigerShield/                       (its own PUBLIC repo; installs as application
    a hardcoded switch in core, and a module shouldn't edit core. So the module ships its own CLI
    entrypoint. A future platform feature (a module command registry) would let `tigershield:refresh`
    live under `bin/tiger`; until then the module script + the lazy tick cover both host types.
-4. **Captcha gating** — the interstitial challenge + pass-token, wired to reCAPTCHA.
+4. **Captcha gating** — **BUILT (2026-07-16).** `Tigershield_Service_Challenge` + the gate's
+   `_challenge`/`_handleChallenge`: an interstitial (reCAPTCHA v2/v3), a solved POST verified up front,
+   and an HMAC-signed, IP-bound clearance cookie that skips re-challenging for a window. Fail-open
+   (fallback allow / provider fail-open). Provider-agnostic seam for hCaptcha/Turnstile. See §6.
 5. **Request WAF** — the rule engine + shipped default ruleset (log-only first), admin toggles.
 6. **Dashboard widget + polish** — the shield card, live-traffic filters, per-org tuning. *(Module side
    scaffolded; blocked on the platform dashboard-widget API — see §15.6.)*
