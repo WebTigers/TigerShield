@@ -15,7 +15,10 @@ this project uses [SemVer](https://semver.org) with a `-beta` stability suffix.
 - **Signed clearance cookie** — a pass issues a short-lived, **HMAC-signed, IP-bound** cookie
   (`tigershield_clear`, no server-side state) that the gate honors to skip re-challenging that browser
   for a window (`captcha.window`, default 1h). Replay from another IP fails the signature.
-- **Admin Captcha card** — provider status + the no-provider fallback policy.
+- **Admin Captcha card** — provider status + the no-provider fallback policy, and (with tiger-core
+  ≥ 0.9.0-beta) the reCAPTCHA controls themselves — enabled / version / site + secret key / min score /
+  fail-open / hide-badge — saved through the shared `Tiger_Recaptcha::saveSettings()`; degrades to a
+  status + link on an older platform. The interstitial honors the platform hide-badge setting.
 
 ### Security
 - Redirect target is restricted to same-site paths (open-redirect + CRLF guarded).
