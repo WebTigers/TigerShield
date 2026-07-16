@@ -1,0 +1,31 @@
+{
+  "schema": "tiger.module/v1",
+  "slug": "tigershield",
+  "name": "TigerShield",
+  "version": "0.1.0-beta",
+  "description": "A plugin-layer web application firewall for Tiger — CrowdSec malicious-IP blocking, captcha gating, rate-limiting, and login protection, all at the PHP layer (no root, no daemon). Built for shared hosting.",
+  "author": { "name": "WebTigers", "url": "https://webtigers.com" },
+  "homepage": "https://webtigers.com/tigershield",
+  "repository": "https://github.com/WebTigers/TigerShield",
+  "license": "BSD-3-Clause",
+  "keywords": ["security", "waf", "firewall", "crowdsec", "rate-limit", "captcha", "login-protection", "plugin"],
+
+  "requires": { "tiger": ">=0.8.0-beta", "php": ">=8.1" },
+
+  "namespace": "Tigershield",
+  "provides": {
+    "acl":        "configs/acl.ini",
+    "migrations": "migrations",
+    "assets":     "assets"
+  },
+
+  "media": {
+    "icon":        "media/icon-256.png",
+    "banner":      "media/banner-1544x500.png",
+    "screenshots": ["media/screenshot-1.png"]
+  },
+
+  "pricing": { "model": "free" },
+
+  "_notes": "Free, BSD-licensed first-party module. The firewall gate is registered by Bootstrap.php (a front-controller plugin); it runs before dispatch and is fail-open. See FEATURES.md for the full design."
+}

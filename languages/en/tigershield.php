@@ -1,0 +1,18 @@
+<?php
+// SPDX-License-Identifier: BSD-3-Clause
+// TigerShield — English strings. Semantic, owner-prefixed keys (tigershield.*).
+return [
+    'tigershield.nav.security'       => 'Security',
+    'tigershield.settings.saved'     => 'Security settings saved.',
+    'tigershield.mode.off'           => 'Off',
+    'tigershield.mode.learn'         => 'Learn',
+    'tigershield.mode.enforce'       => 'Enforce',
+    'tigershield.block.title'        => 'Access blocked',
+    'tigershield.block.body'         => 'Your request was blocked by this site\'s security. If you believe this is a mistake, contact the site owner.',
+    'tigershield.challenge.title'    => 'Please confirm you\'re human',
+    'tigershield.dashboard.title'    => 'Security',
+    'tigershield.dashboard.blocks'   => 'blocked today',
+    'tigershield.dashboard.events'   => 'events today',
+    'tigershield.dashboard.top_ip'   => 'Top IP',
+    'tigershield.dashboard.traffic'  => 'View live traffic',
+];

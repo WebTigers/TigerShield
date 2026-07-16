@@ -1,0 +1,117 @@
+<?php
+// SPDX-License-Identifier: LicenseRef-WebTigers-Proprietary
+// Copyright (c) 2026 WebTigers. Tiger™ and WebTigers™ are trademarks of WebTigers.
+/**
+ * TigerShield settings — the security screen, in the admin shell. Per ADMIN.md:
+ * header + feedback mount + cards + a save wired through the house UI primitives (no page-POST).
+ * Semantic Bootstrap only — reskinnable. Scaffold: the fields map to the tiger.tigershield.* config
+ * keys Tigershield_Service_Settings::save handles; the deeper controls arrive with their phases.
+ */
+$s    = isset($this->settings) ? $this->settings : [];
+$get  = function ($path, $default = '') use ($s) {
+    $node = $s; foreach (explode('.', $path) as $k) { if (!is_array($node) || !array_key_exists($k, $node)) { return $default; } $node = $node[$k]; }
+    return is_scalar($node) ? (string) $node : $default;
+};
+$mode = $get('mode', 'learn');
+?>
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+        <h1 class="h3 mb-1"><i class="fa-solid fa-shield-halved me-2 text-primary"></i>Security</h1>
+        <p class="text-body-secondary mb-0">TigerShield — your firewall, login protection, and malicious-IP blocking in one place.</p>
+    </div>
+    <div class="text-nowrap">
+        <a href="/tigershield/admin/events" class="btn btn-outline-secondary me-2"><i class="fa-solid fa-wave-square me-2"></i>Live traffic</a>
+        <button type="button" id="ts-save" class="btn btn-primary"><i class="fa-solid fa-floppy-disk me-2"></i>Save</button>
+    </div>
+</div>
+
+<div id="ts-feedback"></div>
+
+<?php if ($mode === 'learn'): ?>
+<div class="alert alert-info d-flex align-items-center"><i class="fa-solid fa-graduation-cap me-2"></i>
+    <div><strong>Learn mode</strong> — the shield is watching and logging, but blocking nothing yet. Review
+    <a href="/tigershield/admin/events">Live traffic</a>, then switch to <strong>Enforce</strong> when you're confident.</div>
+</div>
+<?php endif; ?>
+
+<form id="ts-form" onsubmit="return false;" novalidate>
+    <div class="row g-4">
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header fw-semibold"><i class="fa-solid fa-toggle-on me-2"></i>Protection mode</div>
+                <div class="card-body">
+                    <select name="tiger.tigershield.mode" class="form-select">
+                        <option value="off"     <?= $mode === 'off' ? 'selected' : '' ?>>Off — shield disabled</option>
+                        <option value="learn"   <?= $mode === 'learn' ? 'selected' : '' ?>>Learn — log only, block nothing</option>
+                        <option value="enforce" <?= $mode === 'enforce' ? 'selected' : '' ?>>Enforce — actively block &amp; challenge</option>
+                    </select>
+                    <p class="text-body-secondary small mt-2 mb-0">The shield fails <strong>open</strong>: if anything goes wrong, requests are allowed, never dropped.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header fw-semibold"><i class="fa-solid fa-earth-americas me-2"></i>CrowdSec — malicious-IP blocking</div>
+                <div class="card-body">
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" role="switch" id="ts-cs" name="tiger.tigershield.crowdsec.enabled" value="1" <?= $get('crowdsec.enabled', '0') === '1' ? 'checked' : '' ?>>
+                        <label class="form-check-label" for="ts-cs">Block IPs on the CrowdSec community blocklist</label>
+                    </div>
+                    <p class="text-body-secondary small mb-0">Crowd-sourced threat intel, pulled over the CrowdSec API and cached locally — no agent, no root. Enrollment key: <em>coming with phase 3</em>.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header fw-semibold"><i class="fa-solid fa-gauge-high me-2"></i>Rate limiting &amp; login protection</div>
+                <div class="card-body">
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" role="switch" id="ts-rl" name="tiger.tigershield.ratelimit.enabled" value="1" <?= $get('ratelimit.enabled', '1') === '1' ? 'checked' : '' ?>>
+                        <label class="form-check-label" for="ts-rl">Throttle abusive request rates &amp; brute-force logins</label>
+                    </div>
+                    <p class="text-body-secondary small mt-2 mb-0">Escalates throttle &rarr; captcha &rarr; block. Login limits build on Tiger's existing lockout + audit log.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header fw-semibold"><i class="fa-solid fa-filter-circle-xmark me-2"></i>Request firewall (WAF)</div>
+                <div class="card-body">
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" role="switch" id="ts-waf" name="tiger.tigershield.waf.enabled" value="1" <?= $get('waf.enabled', '1') === '1' ? 'checked' : '' ?>>
+                        <label class="form-check-label" for="ts-waf">Screen requests for injection / traversal / scanner patterns</label>
+                    </div>
+                    <label class="form-label small">When a rule matches</label>
+                    <select name="tiger.tigershield.waf.action" class="form-select form-select-sm">
+                        <?php $wa = $get('waf.action', 'log'); foreach (['log' => 'Log only', 'captcha' => 'Challenge (captcha)', 'block' => 'Block'] as $v => $lbl): ?>
+                        <option value="<?= $v ?>" <?= $wa === $v ? 'selected' : '' ?>><?= $lbl ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+<script>
+document.getElementById('ts-save').addEventListener('click', function () {
+    var form = document.getElementById('ts-form');
+    var fb   = document.getElementById('ts-feedback');
+    var fd   = new URLSearchParams(new FormData(form));
+    // unchecked switches don't submit — send an explicit "0" so a toggle-off persists.
+    ['tiger.tigershield.crowdsec.enabled','tiger.tigershield.ratelimit.enabled','tiger.tigershield.waf.enabled'].forEach(function (k) {
+        if (!fd.has(k)) { fd.set(k, '0'); }
+    });
+    fd.set('module', 'tigershield'); fd.set('service', 'settings'); fd.set('method', 'save');
+    TigerButton.run(this, function () {
+        return fetch('/api', { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: fd })
+            .then(function (r) { return r.json().catch(function () { return {}; }); });
+    }).then(function (res) {
+        if (res && res.result === 1) { TigerDOM.notify(fb, 'Security settings saved.', { type: 'success' }); return; }
+        (res && res.messages || []).forEach(function (m) { TigerDOM.notify(fb, m.message, { type: m.class }); });
+    }).catch(function () { TigerDOM.notify(fb, 'Network error — please try again.', { type: 'error' }); });
+});
+</script>
