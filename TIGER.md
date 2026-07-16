@@ -45,4 +45,5 @@ requests are allowed, never dropped. A kill-switch (and a break-glass file) can 
 ## License
 
 **Free** and **BSD 3-Clause** — a first-party module, yours to use, modify, and redistribute. The
-Tiger / TigerShield / WebTigers trademarks are reserved. See [LICENSE](LICENSE).
+Tiger / TigerShield / WebTigers trademarks are reserved. See [LICENSE](LICENSE) and
+[TRADEMARKS.md](TRADEMARKS.md).

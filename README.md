@@ -23,4 +23,4 @@ screen appears under admin Settings.
 ## License
 
 [BSD 3-Clause](LICENSE) © 2026 WebTigers. Use, modify, and redistribute freely; the Tiger / TigerShield
-/ WebTigers trademarks are reserved.
+/ WebTigers trademarks are reserved — see [TRADEMARKS.md](TRADEMARKS.md).

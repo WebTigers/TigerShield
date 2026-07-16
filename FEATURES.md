@@ -235,7 +235,7 @@ shield can be tuned per-org (an org row overrides the global default), same mech
 ```
 TigerShield/                       (its own PUBLIC repo; installs as application/modules/tigershield/)
   module.json                      ; manifest (type via keywords: security/waf/plugin; pricing: free; BSD-3)
-  FEATURES.md  TIGER.md  README.md  AGENTS.md  CHANGELOG.md  LICENSE
+  FEATURES.md  TIGER.md  README.md  AGENTS.md  CHANGELOG.md  LICENSE  TRADEMARKS.md
   Bootstrap.php                    ; registers the firewall plugin + admin Settings entry + dashboard widget
   configs/  acl.ini  module.ini    ; admin-gated controller/services; defaults
   plugins/  Firewall.php           ; Tigershield_Plugin_Firewall — the front-controller gate (§1)

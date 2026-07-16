@@ -7,6 +7,8 @@ this project uses [SemVer](https://semver.org) with a `-beta` stability suffix.
 
 ### Added
 - Public release under the **BSD 3-Clause** license.
+- `TRADEMARKS.md` — trademark reservation split out of `LICENSE` so the license file is a clean,
+  unmodified BSD-3-Clause grant (detected correctly by GitHub / SPDX tooling).
 - `media/` store assets (icon, banner, screenshots) + `AGENTS.md`.
 - Dashboard widget scaffold (`Tigershield_Widget_Shield`) — registers against the forthcoming Tiger
   dashboard-widget API when present; a no-op until then (FEATURES.md §15.6).
