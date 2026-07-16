@@ -116,12 +116,56 @@ $cs   = isset($this->crowdsec) && is_array($this->crowdsec) ? $this->crowdsec : 
             <div class="card h-100">
                 <div class="card-header fw-semibold"><i class="fa-solid fa-user-check me-2"></i>Captcha gating</div>
                 <div class="card-body">
-                    <?php $cap = isset($this->captcha) && is_array($this->captcha) ? $this->captcha : []; ?>
+                    <?php
+                    $cap = isset($this->captcha) && is_array($this->captcha) ? $this->captcha : [];
+                    $rc  = isset($this->recaptcha) && is_array($this->recaptcha) ? $this->recaptcha : [];
+                    $rcV = (string) ($rc['version'] ?? 'v2');
+                    ?>
                     <?php if (!empty($cap['available'])): ?>
-                    <p class="small mb-2"><i class="fa-solid fa-circle-check text-success me-1"></i>reCAPTCHA <?= htmlspecialchars($cap['version'] ?? 'v2') ?> is configured — a <em>challenge</em> verdict shows an interstitial instead of a flat block.</p>
+                    <p class="small mb-3"><i class="fa-solid fa-circle-check text-success me-1"></i>reCAPTCHA <?= htmlspecialchars($rcV) ?> is configured — a <em>challenge</em> verdict shows an interstitial instead of a flat block.</p>
                     <?php else: ?>
-                    <p class="small text-body-secondary mb-2"><i class="fa-solid fa-circle-info me-1"></i>No captcha provider configured. Set up <strong>reCAPTCHA</strong> (site + secret key) in the platform settings to gate suspicious visitors with a challenge instead of blocking them.</p>
+                    <p class="small text-body-secondary mb-3"><i class="fa-solid fa-circle-info me-1"></i>Set up <strong>reCAPTCHA</strong> below (or in <a href="/system/settings">System settings</a>) to gate suspicious visitors with a challenge instead of blocking them.</p>
                     <?php endif; ?>
+
+                    <?php if (empty($this->recaptchaManageable)): ?>
+                    <p class="small text-body-secondary mb-3"><i class="fa-solid fa-triangle-exclamation me-1"></i>Update the platform to manage reCAPTCHA keys here; for now configure them in <a href="/system/settings">System settings</a>.</p>
+                    <?php else: ?>
+
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" role="switch" id="ts-rc-enabled" name="recaptcha_enabled" value="1" <?= !empty($rc['enabled']) ? 'checked' : '' ?>>
+                        <label class="form-check-label" for="ts-rc-enabled">Enable reCAPTCHA</label>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small mb-1" for="ts-rc-version">Version</label>
+                        <select id="ts-rc-version" name="recaptcha_version" class="form-select form-select-sm">
+                            <option value="v2" <?= $rcV === 'v2' ? 'selected' : '' ?>>v2 — checkbox</option>
+                            <option value="v3" <?= $rcV === 'v3' ? 'selected' : '' ?>>v3 — invisible score</option>
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small mb-1" for="ts-rc-site">Site key <span class="text-body-secondary">(public)</span></label>
+                        <input type="text" id="ts-rc-site" name="recaptcha_site_key" class="form-control form-control-sm" autocomplete="off" value="<?= htmlspecialchars((string) ($rc['site_key'] ?? '')) ?>">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small mb-1" for="ts-rc-secret">Secret key <span class="text-body-secondary">(encrypted)</span></label>
+                        <input type="password" id="ts-rc-secret" name="recaptcha_secret_key" class="form-control form-control-sm" autocomplete="new-password" placeholder="<?= !empty($rc['has_secret']) ? '•••••••• — leave blank to keep' : 'Paste your secret key' ?>">
+                    </div>
+                    <fieldset id="ts-rc-v3" class="border rounded p-2 mb-2 <?= $rcV === 'v3' ? '' : 'd-none' ?>">
+                        <div class="mb-2">
+                            <label class="form-label small mb-1" for="ts-rc-score">Min score (0–1)</label>
+                            <input type="text" id="ts-rc-score" name="recaptcha_min_score" class="form-control form-control-sm" style="max-width:8rem" inputmode="decimal" value="<?= htmlspecialchars((string) ($rc['min_score'] ?? '0.5')) ?>">
+                        </div>
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input" type="checkbox" role="switch" id="ts-rc-hidebadge" name="recaptcha_hide_badge" value="1" <?= !empty($rc['hide_badge']) ? 'checked' : '' ?>>
+                            <label class="form-check-label small" for="ts-rc-hidebadge">Hide the reCAPTCHA badge <span class="text-body-secondary">(adds the required legal notice)</span></label>
+                        </div>
+                    </fieldset>
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" role="switch" id="ts-rc-failopen" name="recaptcha_fail_open" value="1" <?= !empty($rc['fail_open']) ? 'checked' : '' ?>>
+                        <label class="form-check-label small" for="ts-rc-failopen">Fail open on a reCAPTCHA outage</label>
+                    </div>
+                    <?php endif; ?>
+
                     <label class="form-label small">When no captcha is available, a challenge verdict should</label>
                     <select name="tiger.tigershield.captcha.fallback" class="form-select form-select-sm">
                         <?php $cf = $get('captcha.fallback', 'allow'); foreach (['allow' => 'Allow the request (fail open)', 'block' => 'Block the request'] as $v => $lbl): ?>
@@ -140,7 +184,8 @@ document.getElementById('ts-save').addEventListener('click', function () {
     var fb   = document.getElementById('ts-feedback');
     var fd   = new URLSearchParams(new FormData(form));
     // unchecked switches don't submit — send an explicit "0" so a toggle-off persists.
-    ['tiger.tigershield.crowdsec.enabled','tiger.tigershield.crowdsec.contribute','tiger.tigershield.ratelimit.enabled','tiger.tigershield.waf.enabled'].forEach(function (k) {
+    ['tiger.tigershield.crowdsec.enabled','tiger.tigershield.crowdsec.contribute','tiger.tigershield.ratelimit.enabled','tiger.tigershield.waf.enabled',
+     'recaptcha_enabled','recaptcha_fail_open','recaptcha_hide_badge'].forEach(function (k) {
         if (!fd.has(k)) { fd.set(k, '0'); }
     });
     fd.set('module', 'tigershield'); fd.set('service', 'settings'); fd.set('method', 'save');
@@ -152,4 +197,9 @@ document.getElementById('ts-save').addEventListener('click', function () {
         (res && res.messages || []).forEach(function (m) { TigerDOM.notify(fb, m.message, { type: m.class }); });
     }).catch(function () { TigerDOM.notify(fb, 'Network error — please try again.', { type: 'error' }); });
 });
+// Show the v3-only reCAPTCHA options only when v3 is selected.
+(function () {
+    var ver = document.getElementById('ts-rc-version'), v3 = document.getElementById('ts-rc-v3');
+    if (ver && v3) { var s = function () { v3.classList.toggle('d-none', ver.value !== 'v3'); }; ver.addEventListener('change', s); s(); }
+})();
 </script>

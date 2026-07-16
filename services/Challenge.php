@@ -57,7 +57,7 @@ class Tigershield_Service_Challenge
     }
 
     /** Issue the signed clearance cookie for this IP (and return its value, for testing). */
-    public function issueClearance($ip, Zend_Controller_Request_Abstract $request = null)
+    public function issueClearance($ip, ?Zend_Controller_Request_Abstract $request = null)
     {
         $exp   = time() + $this->window();
         $value = $exp . '.' . $this->_sign($ip, $exp);
@@ -122,9 +122,13 @@ class Tigershield_Service_Challenge
               . 'document.getElementById("tok").value=t;f.submit();});});});</script>'
             : '';
 
+        // Honor the platform's "hide the v3 badge" setting (with the required legal notice in its place).
+        $badge  = class_exists('Tiger_Recaptcha') ? Tiger_Recaptcha::badgeCss() : '';
+        $notice = class_exists('Tiger_Recaptcha') ? Tiger_Recaptcha::legalNotice() : '';
+
         return '<!doctype html><html lang="en"><head><meta charset="utf-8">'
              . '<meta name="viewport" content="width=device-width, initial-scale=1"><title>Verify you\'re human</title>'
-             . $script
+             . $script . $badge
              . '<style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;'
              . 'font:16px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#0f1216;color:#e8eaed}'
              . '.c{max-width:440px;text-align:center;padding:32px}h1{font-size:1.4rem;margin:.4em 0}'
@@ -139,6 +143,7 @@ class Tigershield_Service_Challenge
              . '<input type="hidden" name="return" value="' . $ret . '">'
              . $widget
              . '<div><button type="submit">Continue</button></div></form>'
+             . $notice
              . '</div>' . $submitJs . '</body></html>';
     }
 

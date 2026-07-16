@@ -24,8 +24,15 @@ class Tigershield_AdminController extends Tiger_Controller_Admin_Action
             : ['enabled' => false, 'registered' => false, 'enrolled' => false, 'last_sync' => 0, 'count' => 0, 'last_error' => ''];
         $this->view->captcha = [
             'available' => class_exists('Tigershield_Service_Challenge') && (new Tigershield_Service_Challenge())->available(),
-            'version'   => class_exists('Tiger_Recaptcha') ? Tiger_Recaptcha::version() : 'v2',
         ];
+        // The same reCAPTCHA controls the core System screen offers — surfaced here for convenience,
+        // saved through the shared Tiger_Recaptcha::saveSettings(). Requires a core new enough to expose
+        // the shared reader/writer; on an older platform the card degrades to a status + link.
+        $manageable = class_exists('Tiger_Recaptcha') && method_exists('Tiger_Recaptcha', 'settings');
+        $this->view->recaptchaManageable = $manageable;
+        $this->view->recaptcha = $manageable
+            ? Tiger_Recaptcha::settings()
+            : ['enabled' => 0, 'version' => 'v2', 'site_key' => '', 'has_secret' => false, 'min_score' => 0.5, 'fail_open' => 1, 'hide_badge' => 0];
     }
 
     /** Live traffic: a DataTables grid of recent shield events (rows load from Tigershield_Service_Events). */

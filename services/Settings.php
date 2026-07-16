@@ -35,6 +35,20 @@ class Tigershield_Service_Settings extends Tiger_Service_Service
                 }
             });
 
+            // reCAPTCHA controls (shared with the core System settings screen) — same shared writer, so
+            // the two screens stay in lockstep. Only touched when the captcha card submitted its fields.
+            if (class_exists('Tiger_Recaptcha') && method_exists('Tiger_Recaptcha', 'saveSettings') && array_key_exists('recaptcha_enabled', $params)) {
+                Tiger_Recaptcha::saveSettings([
+                    'enabled'    => !empty($params['recaptcha_enabled']) ? 1 : 0,
+                    'version'    => $params['recaptcha_version'] ?? 'v2',
+                    'site_key'   => $params['recaptcha_site_key'] ?? '',
+                    'secret_key' => $params['recaptcha_secret_key'] ?? '',
+                    'min_score'  => ($params['recaptcha_min_score'] ?? '') === '' ? 0.5 : $params['recaptcha_min_score'],
+                    'fail_open'  => !empty($params['recaptcha_fail_open']) ? 1 : 0,
+                    'hide_badge' => !empty($params['recaptcha_hide_badge']) ? 1 : 0,
+                ]);
+            }
+
             // If the operator supplied a CrowdSec enrollment (attachment) key, enroll now — OUTSIDE the
             // transaction (it makes a network call). Fail-soft: a failed enroll never fails the save.
             $msg = 'tigershield.settings.saved';
