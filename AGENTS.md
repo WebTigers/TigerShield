@@ -54,12 +54,15 @@ the box in **learn mode** and clean up any seeded `login` / `tigershield_event` 
 ```
 Bootstrap.php            registers the firewall plugin + admin Settings entry + dashboard widget
 plugins/Firewall.php     Tigershield_Plugin_Firewall — the front-controller gate (fail-open)
-services/                RateLimit (APCu), Settings (/api save), Events (/api datatable)
+services/                RateLimit (APCu), Settings (/api save), Events (/api datatable),
+                         Crowdsec (CAPI client — no SDK), Blocklist (local decision cache the gate reads)
 models/Event.php         the event log store (UUID PK, standard columns)
 widgets/Shield.php        the dashboard widget (blocked on the platform widget API — see FEATURES §15.6)
+bin/tigershield.php      module CLI (cron): refresh | status | provision | enroll — no module cmd registry
 migrations/              timestamp-versioned schema
 configs/  acl.ini module.ini
 views/scripts/admin/     settings + events screens
 languages/en/            semantic tigershield.* keys
 media/                   store/marketing art (icon, banner, screenshots)
+storage/cache/tigershield/  runtime cache (blocklist.json, token.json, refresh.lock) — NOT committed
 ```

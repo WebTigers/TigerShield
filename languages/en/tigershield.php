@@ -15,4 +15,10 @@ return [
     'tigershield.dashboard.events'   => 'events today',
     'tigershield.dashboard.top_ip'   => 'Top IP',
     'tigershield.dashboard.traffic'  => 'View live traffic',
+    'tigershield.crowdsec.enrolled'      => 'Security settings saved. CrowdSec machine enrolled.',
+    'tigershield.crowdsec.enroll_failed' => 'Settings saved, but CrowdSec enrollment failed — check the enrollment key.',
+    'tigershield.crowdsec.registered'    => 'Registered',
+    'tigershield.crowdsec.not_registered' => 'Not registered',
+    'tigershield.crowdsec.last_sync'     => 'Last sync',
+    'tigershield.crowdsec.blocklist'     => 'Blocklist',
 ];

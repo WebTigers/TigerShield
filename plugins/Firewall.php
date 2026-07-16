@@ -19,6 +19,7 @@ class Tigershield_Plugin_Firewall extends Zend_Controller_Plugin_Abstract
     {
         try {
             if (!self::_enabled()) { return; }                        // kill-switch / break-glass file
+            self::_maybeScheduleRefresh($request);                    // opportunistic out-of-band CrowdSec pull
             $ip = self::_clientIp($request);
             if ($ip === '' || self::_isAllowlisted($ip)) { return; }  // trusted → never gated
 
@@ -45,21 +46,42 @@ class Tigershield_Plugin_Firewall extends Zend_Controller_Plugin_Abstract
 
     protected static function _decide($ip, Zend_Controller_Request_Abstract $request)
     {
-        if (self::_config('ratelimit.enabled', '1') === '0') { return null; }
+        // CrowdSec cached decision first — a known-bad IP shouldn't reach anything else. Pure local
+        // cache lookup (the blocklist is filled out-of-band), so it's microseconds and never networks.
+        $d = self::_crowdsecDecision($ip);
+        if ($d !== null) { return $d; }
 
-        // Login protection first — reads Tiger's login audit log (no cache; works on any host). Catches
-        // distributed brute force (many failures from one IP) AND credential stuffing (one IP spraying
-        // many accounts). Complements Tiger's per-ACCOUNT lockout with a per-IP dimension.
-        if (self::_isLoginPost($request)) {
-            $d = self::_loginDecision($ip, $request);
-            if ($d) { return $d; }
+        if (self::_config('ratelimit.enabled', '1') !== '0') {
+            // Login protection — reads Tiger's login audit log (no cache; works on any host). Catches
+            // distributed brute force (many failures from one IP) AND credential stuffing (one IP
+            // spraying many accounts). Complements Tiger's per-ACCOUNT lockout with a per-IP dimension.
+            if (self::_isLoginPost($request)) {
+                $d = self::_loginDecision($ip, $request);
+                if ($d !== null) { return $d; }
+            }
+            // General per-request rate limiting — needs a fast counter (APCu); graceful no-op without.
+            return self::_rateLimitDecision($ip, $request);
         }
+        return null;
 
-        // General per-request rate limiting — needs a fast counter (APCu); graceful no-op without one.
-        return self::_rateLimitDecision($ip, $request);
-
-        // TODO(phase 3): manual block-list / country deny + CrowdSec cached decisions.
         // TODO(phase 5): request WAF ruleset.
+    }
+
+    /**
+     * CrowdSec / local-blocklist decision — a set-membership lookup against the locally cached community
+     * blocklist (Tigershield_Service_Blocklist, filled by Tigershield_Service_Crowdsec out of band).
+     * Own toggle (crowdsec.enabled, default off) so it costs nothing until enrolled. Never networks.
+     */
+    protected static function _crowdsecDecision($ip)
+    {
+        if (self::_config('crowdsec.enabled', '0') !== '1') { return null; }
+        if (!class_exists('Tigershield_Service_Blocklist')) { return null; }
+        $d = (new Tigershield_Service_Blocklist())->lookup($ip);
+        if (!$d) { return null; }
+        return [
+            'action' => (($d['type'] ?? 'ban') === 'captcha' ? 'captcha' : 'block'),
+            'reason' => 'crowdsec: ' . ($d['scenario'] ?? 'community blocklist'),
+        ];
     }
 
     /** Is this a POST to the sign-in endpoint (/login or /auth/login)? */
@@ -107,6 +129,43 @@ class Tigershield_Plugin_Firewall extends Zend_Controller_Plugin_Abstract
             return ['action' => 'block', 'reason' => 'rate: ' . $r['count'] . ' requests in ' . $win . 's'];
         }
         return null;
+    }
+
+    /**
+     * No-cron CrowdSec refresh: on a capable host (a cron running the module CLI) this never fires; on a
+     * shared host without cron, one request per interval pulls the blocklist AFTER the response is flushed
+     * (fastcgi_finish_request), so the visitor never waits. A lock file + its mtime throttle it to one
+     * refresh per interval across all workers. Entirely fail-open — scheduling can't affect the request.
+     */
+    protected static function _maybeScheduleRefresh(Zend_Controller_Request_Abstract $request)
+    {
+        try {
+            if (self::_config('crowdsec.enabled', '0') !== '1') { return; }
+            if (!function_exists('fastcgi_finish_request')) { return; }   // only where we can run post-response
+            if (!class_exists('Tigershield_Service_Crowdsec')) { return; }
+
+            $interval = max(300, (int) self::_config('crowdsec.refresh', '900'));
+            $lock = Tigershield_Service_Blocklist::dir() . '/refresh.lock';
+            if (time() - (int) (@filemtime($lock) ?: 0) < $interval) { return; }   // not due (cheap stat)
+
+            $fh = @fopen($lock, 'c');
+            if (!$fh) { return; }
+            if (!@flock($fh, LOCK_EX | LOCK_NB)) { @fclose($fh); return; }          // another worker has it
+            clearstatcache(true, $lock);
+            if (time() - (int) (@filemtime($lock) ?: 0) < $interval) {             // re-check under lock
+                @flock($fh, LOCK_UN); @fclose($fh); return;
+            }
+            @touch($lock);                                                          // claim the window now
+            @flock($fh, LOCK_UN); @fclose($fh);
+
+            register_shutdown_function(function () {
+                try {
+                    if (function_exists('fastcgi_finish_request')) { @fastcgi_finish_request(); }
+                    @set_time_limit(30);
+                    (new Tigershield_Service_Crowdsec())->refresh();
+                } catch (Throwable $e) { /* out-of-band; never surfaces */ }
+            });
+        } catch (Throwable $e) { /* scheduling must never affect the request */ }
     }
 
     // -- helpers -------------------------------------------------------------------------------------

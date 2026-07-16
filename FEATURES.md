@@ -69,9 +69,14 @@ view, and honors a global **learn/monitor mode** (log-only, block nothing) for a
 
 ---
 
-## 3. CrowdSec integration — the shared-hosting way (planned)
+## 3. CrowdSec integration — the shared-hosting way (BUILT 2026-07-16)
 
-The crux: get CrowdSec's crowd-sourced threat intel onto a host that **can't run the agent**.
+The crux: get CrowdSec's crowd-sourced threat intel onto a host that **can't run the agent**. Shipped in
+§15 phase 3 — the shape below is what's implemented (`Tigershield_Service_Crowdsec` +
+`Tigershield_Service_Blocklist`); credentials are stored **encrypted** in the config tier rather than
+local.ini (so the web user needn't write local.ini), and the decision cache is the atomic JSON file
+under `storage/cache/tigershield/` (the DB `tigershield_decision` table in §10 is deferred — the file
+is the always-available store).
 
 - **CAPI, not LAPI.** The classic setup is *agent* (parses logs → decisions) + *bouncer* (enforces). On
   shared hosting there's no agent. Instead we act as a **standalone bouncer** against the **Central API
@@ -275,8 +280,23 @@ TigerShield/                       (its own PUBLIC repo; installs as application
    force) + per-account (credential stuffing), no cache, works on any host; complements Tiger's
    per-account lockout. General per-request rate limiting is APCu-backed (graceful no-op without it).
    Enforcement is a real 429 block page (learn mode logs only). No external dependency.
-3. **CrowdSec CAPI client + cache + refresh** — the built-in lightweight client, decision stream, cache,
-   `tigershield:refresh` command; enforce `ban`/`captcha` from the cache.
+3. **CrowdSec CAPI client + cache + refresh** — **BUILT (2026-07-16).** `Tigershield_Service_Crowdsec`
+   is a dependency-free CAPI client (register → login → `decisions/stream?startup=true` + downloadable
+   blocklist links → optional `enroll` → optional `signals` push), all plain curl+JSON (no SDK).
+   Machine credentials are stored **encrypted at rest** in the config tier (`Tiger_Crypto`; the key lives
+   in local.ini) — no local.ini write needed, never plaintext in the DB. The community blocklist lands
+   in `Tigershield_Service_Blocklist`, an atomic JSON file under `storage/cache/tigershield/` (memoized
+   per-request + an mtime-keyed APCu warm on FPM; exact-IP O(1) + CIDR v4/v6 match). The gate's
+   `_crowdsecDecision` is a pure cache lookup — `ban`→block, `captcha`→challenge — with its own
+   `crowdsec.enabled` toggle (off by default, so zero cost until enrolled). Refresh runs **out of band**:
+   a self-contained module CLI (`bin/tigershield.php refresh`, for cron) OR a throttled, lock-guarded
+   `fastcgi_finish_request` lazy tick after the response (for no-cron hosts). Every network call is
+   fail-soft; a CrowdSec outage leaves the last-good cache and never blocks the site.
+
+   *Platform gap noted:* Tiger's console (`bin/tiger`) has **no module-command registry** — commands are
+   a hardcoded switch in core, and a module shouldn't edit core. So the module ships its own CLI
+   entrypoint. A future platform feature (a module command registry) would let `tigershield:refresh`
+   live under `bin/tiger`; until then the module script + the lazy tick cover both host types.
 4. **Captcha gating** — the interstitial challenge + pass-token, wired to reCAPTCHA.
 5. **Request WAF** — the rule engine + shipped default ruleset (log-only first), admin toggles.
 6. **Dashboard widget + polish** — the shield card, live-traffic filters, per-org tuning. *(Module side

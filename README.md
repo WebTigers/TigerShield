@@ -11,8 +11,9 @@ root, no daemon). Built for shared hosting.
 
 **Early beta.** Built and shipping: the fail-open front-controller gate (ships in **learn mode**),
 **login protection** (per-IP + per-account, off Tiger's login audit log), general **rate limiting**
-(APCu), the admin Security screen, and the event log. Landing next, per the build phases in
-[FEATURES.md §15](FEATURES.md): CrowdSec CAPI → captcha gating → request WAF → dashboard widget.
+(APCu), **CrowdSec malicious-IP blocking** (built-in CAPI client — no agent, no SDK — cached locally and
+enforced as a pure lookup), the admin Security screen, and the event log. Landing next, per the build
+phases in [FEATURES.md §15](FEATURES.md): captcha gating → request WAF → dashboard widget.
 
 ## Dev
 

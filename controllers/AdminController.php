@@ -19,6 +19,9 @@ class Tigershield_AdminController extends Tiger_Controller_Admin_Action
     {
         $this->view->title    = 'Security — Tiger Admin';
         $this->view->settings = self::_currentConfig();
+        $this->view->crowdsec = class_exists('Tigershield_Service_Crowdsec')
+            ? (new Tigershield_Service_Crowdsec())->status()
+            : ['enabled' => false, 'registered' => false, 'enrolled' => false, 'last_sync' => 0, 'count' => 0, 'last_error' => ''];
     }
 
     /** Live traffic: a DataTables grid of recent shield events (rows load from Tigershield_Service_Events). */

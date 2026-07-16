@@ -23,6 +23,7 @@ class Tigershield_Service_Settings extends Tiger_Service_Service
                 'tiger.tigershield.mode',
                 'tiger.tigershield.ratelimit.enabled',
                 'tiger.tigershield.crowdsec.enabled',
+                'tiger.tigershield.crowdsec.contribute',
                 'tiger.tigershield.waf.enabled',
                 'tiger.tigershield.waf.action',
             ];
@@ -32,7 +33,17 @@ class Tigershield_Service_Settings extends Tiger_Service_Service
                     if (array_key_exists($k, $params)) { $config->set('global', '', $k, (string) $params[$k]); }
                 }
             });
-            $this->_success([], 'tigershield.settings.saved');
+
+            // If the operator supplied a CrowdSec enrollment (attachment) key, enroll now — OUTSIDE the
+            // transaction (it makes a network call). Fail-soft: a failed enroll never fails the save.
+            $msg = 'tigershield.settings.saved';
+            $enrollKey = trim((string) ($params['crowdsec_enroll_key'] ?? ''));
+            if ($enrollKey !== '' && (string) ($params['tiger.tigershield.crowdsec.enabled'] ?? '') === '1'
+                && class_exists('Tigershield_Service_Crowdsec')) {
+                $res = (new Tigershield_Service_Crowdsec())->enroll($enrollKey);
+                $msg = $res['ok'] ? 'tigershield.crowdsec.enrolled' : 'tigershield.crowdsec.enroll_failed';
+            }
+            $this->_success([], $msg);
         } catch (Throwable $e) {
             $this->_error(APPLICATION_ENV !== 'production' ? $e->getMessage() : 'core.api.error.general');
         }
