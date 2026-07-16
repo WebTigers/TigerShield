@@ -157,10 +157,14 @@ challenge** instead — `Tigershield_Service_Challenge`, wired into the gate's `
 
 ---
 
-## 7. The request WAF (planned)
+## 7. The request WAF (BUILT 2026-07-16 — v1)
 
-A **rule engine** over the incoming request (URI, query, body, headers, UA) matching the common attack
-classes an endpoint WAF covers:
+A **rule engine** over the incoming request (`Tigershield_Service_Waf` + `rules/default-waf.php`) matching
+the common attack classes an endpoint WAF covers. **v1 inspects path / query / User-Agent / method — NOT
+the POST body** (that's where false positives live; body scanning + a `tigershield_rule` custom-rule editor
+are deferred to 5.1). A curated, high-signal ruleset, not a ModSecurity-CRS port. Measured cost:
+**~15µs/request** (worst case — a benign request running the whole ruleset). Validated: 10/10 attack
+classes caught, **0 false positives** on a benign battery. The design below is what shipped:
 
 - **Signatures:** SQLi, XSS, path traversal (`../`), PHP/LFI/RFI probes, known scanner user-agents,
   disallowed methods, oversized/garbage requests.
@@ -308,7 +312,10 @@ TigerShield/                       (its own PUBLIC repo; installs as application
    `_challenge`/`_handleChallenge`: an interstitial (reCAPTCHA v2/v3), a solved POST verified up front,
    and an HMAC-signed, IP-bound clearance cookie that skips re-challenging for a window. Fail-open
    (fallback allow / provider fail-open). Provider-agnostic seam for hCaptcha/Turnstile. See §6.
-5. **Request WAF** — the rule engine + shipped default ruleset (log-only first), admin toggles.
+5. **Request WAF** — **BUILT (2026-07-16, v1).** `Tigershield_Service_Waf` + `rules/default-waf.php`:
+   9 curated categories over path/query/UA/method (no body scanning in v1), per-category admin toggles,
+   high-confidence → `waf.action`, soft SQLi/XSS heuristics capped at log-only. ~15µs/request, 0 FP on the
+   benign battery. Deferred to 5.1: `tigershield_rule` custom-rule editor + POST-body scanning.
 6. **Dashboard widget + polish** — the shield card, live-traffic filters, per-org tuning. *(Module side
    scaffolded; blocked on the platform dashboard-widget API — see §15.6.)*
 

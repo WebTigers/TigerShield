@@ -30,7 +30,9 @@ class Tigershield_Plugin_Firewall extends Zend_Controller_Plugin_Abstract
             if ($decision === null) { return; }
 
             self::_logEvent($ip, $decision, $request);
-            if (self::_mode() !== 'enforce') { return; }              // off / learn → log only, never block
+            // A 'log' decision (WAF observe-only rules) is recorded but NEVER enforced, even in enforce
+            // mode; off / learn → everything is log-only too.
+            if (($decision['action'] ?? '') === 'log' || self::_mode() !== 'enforce') { return; }
 
             if ($decision['action'] === 'captcha') {
                 self::_challenge($request, $ip);                       // interstitial (or fallback) — may exit
@@ -63,11 +65,33 @@ class Tigershield_Plugin_Firewall extends Zend_Controller_Plugin_Abstract
                 if ($d !== null) { return $d; }
             }
             // General per-request rate limiting — needs a fast counter (APCu); graceful no-op without.
-            return self::_rateLimitDecision($ip, $request);
+            $rl = self::_rateLimitDecision($ip, $request);
+            if ($rl !== null) { return $rl; }
         }
-        return null;
 
-        // TODO(phase 5): request WAF ruleset.
+        // Request WAF — inspects the request CONTENT (path/query/UA/method) for attack signatures. Runs
+        // last (cheap CPU on short strings, no network); soft heuristics only ever log, never block.
+        return self::_wafDecision($request);
+    }
+
+    /**
+     * Request-WAF decision — signature matching over the request surface (Tigershield_Service_Waf).
+     * High-confidence categories use the configured `waf.action`; soft heuristics (SQLi/XSS) are capped
+     * at observe-only ('log'). Skips static assets. Own toggle (waf.enabled).
+     */
+    protected static function _wafDecision(Zend_Controller_Request_Abstract $request)
+    {
+        if (self::_config('waf.enabled', '1') !== '1') { return null; }
+        if (!class_exists('Tigershield_Service_Waf')) { return null; }
+        if (self::_isAsset($request)) { return null; }
+
+        $hit = (new Tigershield_Service_Waf())->inspect($request);
+        if (!$hit) { return null; }
+
+        // High-confidence → the configured action; soft heuristics never auto-block (log-only).
+        $action = ($hit['tier'] === 'soft') ? 'log' : self::_config('waf.action', 'log');
+        if (!in_array($action, ['log', 'captcha', 'block'], true)) { $action = 'log'; }
+        return ['action' => $action, 'reason' => 'waf: ' . $hit['label']];
     }
 
     /**
@@ -220,7 +244,9 @@ class Tigershield_Plugin_Firewall extends Zend_Controller_Plugin_Abstract
         try {
             (new Tigershield_Model_Event())->record([
                 'ip'     => $ip,
-                'action' => (self::_mode() === 'enforce' ? $decision['action'] : 'observed'),
+                // Store the enforced action only when it was actually enforced; a 'log' verdict or
+                // learn/off mode is recorded as 'observed'.
+                'action' => ((self::_mode() === 'enforce' && ($decision['action'] ?? '') !== 'log') ? $decision['action'] : 'observed'),
                 'reason' => $decision['reason'] ?? '',
                 'route'  => self::_path($request),
                 'ua'     => (string) ($_SERVER['HTTP_USER_AGENT'] ?? ''),

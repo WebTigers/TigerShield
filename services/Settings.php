@@ -27,6 +27,15 @@ class Tigershield_Service_Settings extends Tiger_Service_Service
                 'tiger.tigershield.captcha.fallback',
                 'tiger.tigershield.waf.enabled',
                 'tiger.tigershield.waf.action',
+                'tiger.tigershield.waf.cat.files',
+                'tiger.tigershield.waf.cat.cms',
+                'tiger.tigershield.waf.cat.traversal',
+                'tiger.tigershield.waf.cat.rce',
+                'tiger.tigershield.waf.cat.nullbyte',
+                'tiger.tigershield.waf.cat.method',
+                'tiger.tigershield.waf.cat.scanners',
+                'tiger.tigershield.waf.cat.sqli',
+                'tiger.tigershield.waf.cat.xss',
             ];
             $this->_transaction(function () use ($config, $keys, $params) {
                 foreach ($keys as $k) {

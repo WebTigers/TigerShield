@@ -5,6 +5,22 @@ this project uses [SemVer](https://semver.org) with a `-beta` stability suffix.
 
 ## [Unreleased]
 
+## [0.5.0-beta] — 2026-07-16
+
+### Added
+- **Request WAF (phase 5)** — `Tigershield_Service_Waf` + `rules/default-waf.php`: a curated, high-signal
+  rule engine that screens each request's **path / query / User-Agent / method** for attack signatures
+  (sensitive-file & CMS probes, path traversal / LFI, command injection, null bytes, bad methods, scanner
+  UAs, and — log-only — SQLi/XSS heuristics). Wired into the gate's `_decide` (runs last, skips assets).
+- **9 per-category admin toggles** on the WAF card. High-confidence categories use `waf.action`
+  (log / captcha / block); **soft SQLi/XSS heuristics are hard-capped at log-only** and never auto-block.
+- A new `log` gate verdict (observe-only): recorded to the event log, never enforced even in enforce mode.
+
+### Notes
+- **v1 does not scan POST bodies** (the main false-positive source) — deferred to 5.1 along with a
+  `tigershield_rule` custom-rule editor. Measured cost ~15µs/request (worst case); 0 false positives on a
+  benign test battery.
+
 ## [0.4.0-beta] — 2026-07-16
 
 ### Added
@@ -88,7 +104,9 @@ Initial public release: scaffold + the first protection engines.
 - **No CrowdSec SDK** — CAPI pull (blocklist) and push (`POST /signals`, contribute-back) are both plain
   REST via a built-in lightweight client. Keeps the shared-hosting footprint tiny and dependency-free.
 
-[Unreleased]: https://github.com/WebTigers/TigerShield/compare/v0.3.0-beta...HEAD
+[Unreleased]: https://github.com/WebTigers/TigerShield/compare/v0.5.0-beta...HEAD
+[0.5.0-beta]: https://github.com/WebTigers/TigerShield/compare/v0.4.0-beta...v0.5.0-beta
+[0.4.0-beta]: https://github.com/WebTigers/TigerShield/compare/v0.3.0-beta...v0.4.0-beta
 [0.3.0-beta]: https://github.com/WebTigers/TigerShield/compare/v0.2.0-beta...v0.3.0-beta
 [0.2.0-beta]: https://github.com/WebTigers/TigerShield/compare/v0.1.0-beta...v0.2.0-beta
 [0.1.0-beta]: https://github.com/WebTigers/TigerShield/releases/tag/v0.1.0-beta

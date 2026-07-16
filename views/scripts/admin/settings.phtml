@@ -102,12 +102,26 @@ $cs   = isset($this->crowdsec) && is_array($this->crowdsec) ? $this->crowdsec : 
                         <input class="form-check-input" type="checkbox" role="switch" id="ts-waf" name="tiger.tigershield.waf.enabled" value="1" <?= $get('waf.enabled', '1') === '1' ? 'checked' : '' ?>>
                         <label class="form-check-label" for="ts-waf">Screen requests for injection / traversal / scanner patterns</label>
                     </div>
-                    <label class="form-label small">When a rule matches</label>
-                    <select name="tiger.tigershield.waf.action" class="form-select form-select-sm">
+                    <label class="form-label small">When a high-confidence rule matches</label>
+                    <select name="tiger.tigershield.waf.action" class="form-select form-select-sm mb-3">
                         <?php $wa = $get('waf.action', 'log'); foreach (['log' => 'Log only', 'captcha' => 'Challenge (captcha)', 'block' => 'Block'] as $v => $lbl): ?>
                         <option value="<?= $v ?>" <?= $wa === $v ? 'selected' : '' ?>><?= $lbl ?></option>
                         <?php endforeach; ?>
                     </select>
+                    <label class="form-label small mb-1">Rule categories</label>
+                    <?php
+                    $wafCats = [
+                        'files' => 'Sensitive-file probes', 'cms' => 'CMS/plugin probes', 'traversal' => 'Path traversal / LFI',
+                        'rce' => 'Command injection', 'nullbyte' => 'Null bytes / control chars', 'method' => 'Disallowed methods',
+                        'scanners' => 'Scanner user-agents', 'sqli' => 'SQL injection (log-only)', 'xss' => 'XSS (log-only)',
+                    ];
+                    foreach ($wafCats as $ck => $cl): ?>
+                    <div class="form-check form-switch mb-1">
+                        <input class="form-check-input" type="checkbox" role="switch" id="ts-wafcat-<?= $ck ?>" name="tiger.tigershield.waf.cat.<?= $ck ?>" value="1" <?= $get('waf.cat.' . $ck, '1') === '1' ? 'checked' : '' ?>>
+                        <label class="form-check-label small" for="ts-wafcat-<?= $ck ?>"><?= htmlspecialchars($cl) ?></label>
+                    </div>
+                    <?php endforeach; ?>
+                    <p class="form-text small mb-0">Soft heuristics (SQLi/XSS) only ever log — they never auto-block.</p>
                 </div>
             </div>
         </div>
@@ -185,6 +199,8 @@ document.getElementById('ts-save').addEventListener('click', function () {
     var fd   = new URLSearchParams(new FormData(form));
     // unchecked switches don't submit — send an explicit "0" so a toggle-off persists.
     ['tiger.tigershield.crowdsec.enabled','tiger.tigershield.crowdsec.contribute','tiger.tigershield.ratelimit.enabled','tiger.tigershield.waf.enabled',
+     'tiger.tigershield.waf.cat.files','tiger.tigershield.waf.cat.cms','tiger.tigershield.waf.cat.traversal','tiger.tigershield.waf.cat.rce',
+     'tiger.tigershield.waf.cat.nullbyte','tiger.tigershield.waf.cat.method','tiger.tigershield.waf.cat.scanners','tiger.tigershield.waf.cat.sqli','tiger.tigershield.waf.cat.xss',
      'recaptcha_enabled','recaptcha_fail_open','recaptcha_hide_badge'].forEach(function (k) {
         if (!fd.has(k)) { fd.set(k, '0'); }
     });
