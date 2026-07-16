@@ -161,23 +161,18 @@ class Tigershield_Widget_Shield
     }
 
     /**
-     * Best-effort ISO country for an IP, cached in APCu (IPs don't move countries). Bounded to the few
-     * IPs the widget shows; fail-soft to '' when geolocation is unconfigured/unavailable. Never networks
-     * on a cache hit, so a warm dashboard is a pure DB read.
+     * Best-effort ISO country for an IP. Tiger_Location caches the lookup itself (per provider+IP), so
+     * this stays a thin call — fail-soft to '' when geolocation is unconfigured/unavailable.
      */
     private static function _geo(string $ip): string
     {
         if ($ip === '' || !class_exists('Tiger_Location')) { return ''; }
-        $ck   = 'tigershield:geo:' . md5($ip);
-        $apcu = function_exists('apcu_fetch') && (bool) ini_get('apc.enabled');
-        if ($apcu) { $v = @apcu_fetch($ck); if (is_string($v)) { return $v; } }
-        $cc = '';
         try {
             $place = (new Tiger_Location())->ip($ip);
-            if ($place && $place->country) { $cc = strtoupper(substr((string) $place->country, 0, 2)); }
-        } catch (Throwable $e) { /* geolocation is best-effort */ }
-        if ($apcu) { @apcu_store($ck, $cc, 86400); }
-        return $cc;
+            return ($place && $place->country) ? strtoupper(substr((string) $place->country, 0, 2)) : '';
+        } catch (Throwable $e) {
+            return '';
+        }
     }
 
     /**
