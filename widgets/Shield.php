@@ -99,49 +99,38 @@ class Tigershield_Widget_Shield
         $mode = htmlspecialchars(ucfirst($d['mode']), ENT_QUOTES);
         $cs   = $d['crowdsec'] === 'on' ? 'On' : 'Off';
 
-        $h  = '<div class="d-flex justify-content-between align-items-center small mb-2">'
+        $h  = self::_style()
+            . '<div class="d-flex justify-content-between align-items-center small mb-2">'
             . '<span><strong>Mode:</strong> <span class="text-' . $tone . '">' . $mode . '</span></span>'
             . '<span class="text-body-secondary">CrowdSec: ' . $cs . '</span></div>'
             . '<p class="small text-body-secondary mb-3"><strong class="text-body">' . (int) $d['flagged']
             . '</strong> events flagged in the last 7 days.</p>';
 
-        $any = false;
-
-        if (!empty($d['top_ips'])) {
-            $any  = true;
-            $rows = '';
-            foreach ($d['top_ips'] as $r) {
-                $rows .= '<tr><td><code>' . htmlspecialchars($r['ip'], ENT_QUOTES) . '</code></td><td>'
-                       . ($r['country'] !== '' ? '<span class="badge text-bg-light text-uppercase">' . htmlspecialchars($r['country'], ENT_QUOTES) . '</span>' : '<span class="text-body-secondary">—</span>')
-                       . '</td><td class="text-end">' . (int) $r['hits'] . '</td></tr>';
-            }
-            $h .= self::_table('Top offending IPs', '<tr><th>IP</th><th>Country</th><th class="text-end">Hits</th></tr>', $rows);
+        // Top offending IPs — always shown (empty-state row when there's nothing yet).
+        $rows = '';
+        foreach ($d['top_ips'] as $r) {
+            $rows .= '<tr><td><code>' . htmlspecialchars($r['ip'], ENT_QUOTES) . '</code></td><td>'
+                   . ($r['country'] !== '' ? '<span class="badge text-bg-light text-uppercase">' . htmlspecialchars($r['country'], ENT_QUOTES) . '</span>' : '<span class="text-body-secondary">—</span>')
+                   . '</td><td class="text-end">' . (int) $r['hits'] . '</td></tr>';
         }
+        $h .= self::_table('Top offending IPs', '<tr><th>IP</th><th>Country</th><th class="text-end">Hits</th></tr>', $rows ?: self::_empty(3));
 
-        if (!empty($d['top_countries'])) {
-            $any  = true;
-            $rows = '';
-            foreach ($d['top_countries'] as $r) {
-                $rows .= '<tr><td><span class="badge text-bg-light text-uppercase">' . htmlspecialchars($r['country'], ENT_QUOTES)
-                       . '</span></td><td class="text-end">' . (int) $r['hits'] . '</td></tr>';
-            }
-            $h .= self::_table('Top countries', '<tr><th>Country</th><th class="text-end">Hits</th></tr>', $rows);
+        // Top countries — always shown.
+        $rows = '';
+        foreach ($d['top_countries'] as $r) {
+            $rows .= '<tr><td><span class="badge text-bg-light text-uppercase">' . htmlspecialchars($r['country'], ENT_QUOTES)
+                   . '</span></td><td class="text-end">' . (int) $r['hits'] . '</td></tr>';
         }
+        $h .= self::_table('Top countries', '<tr><th>Country</th><th class="text-end">Hits</th></tr>', $rows ?: self::_empty(2));
 
-        if (!empty($d['top_failed'])) {
-            $any  = true;
-            $rows = '';
-            foreach ($d['top_failed'] as $r) {
-                $ex = !empty($r['existing']) ? '<span class="text-success">Yes</span>' : '<span class="text-danger">No</span>';
-                $rows .= '<tr><td class="text-truncate" style="max-width:9rem">' . htmlspecialchars($r['identifier'], ENT_QUOTES)
-                       . '</td><td class="text-end">' . (int) $r['attempts'] . '</td><td class="text-center">' . $ex . '</td></tr>';
-            }
-            $h .= self::_table('Top targeted logins', '<tr><th>Account</th><th class="text-end">Tries</th><th class="text-center">Real?</th></tr>', $rows);
+        // Top targeted logins — always shown.
+        $rows = '';
+        foreach ($d['top_failed'] as $r) {
+            $ex = !empty($r['existing']) ? '<span class="text-success">Yes</span>' : '<span class="text-danger">No</span>';
+            $rows .= '<tr><td class="text-truncate" style="max-width:9rem">' . htmlspecialchars($r['identifier'], ENT_QUOTES)
+                   . '</td><td class="text-end">' . (int) $r['attempts'] . '</td><td class="text-center">' . $ex . '</td></tr>';
         }
-
-        if (!$any) {
-            $h .= '<p class="small text-body-secondary mb-2"><i class="fa-regular fa-circle-check me-1"></i>The shield is watching — nothing flagged in the last 7 days.</p>';
-        }
+        $h .= self::_table('Top targeted logins', '<tr><th>Account</th><th class="text-end">Tries</th><th class="text-center">Real?</th></tr>', $rows ?: self::_empty(3));
 
         $h .= '<a href="/tigershield/admin/events" class="small text-decoration-none">View live traffic &rarr;</a>';
         return '<div class="tigershield-widget">' . $h . '</div>';
@@ -152,6 +141,23 @@ class Tigershield_Widget_Shield
     {
         return '<div class="mb-3"><div class="fw-semibold small mb-1">' . htmlspecialchars($title, ENT_QUOTES) . '</div>'
              . '<table class="table table-sm small mb-0"><thead>' . $thead . '</thead><tbody>' . $rows . '</tbody></table></div>';
+    }
+
+    /** An empty-state table row spanning $cols columns. */
+    private static function _empty(int $cols): string
+    {
+        return '<tr><td colspan="' . $cols . '" class="text-center text-body-secondary py-2">No data yet.</td></tr>';
+    }
+
+    /** Scoped header styling — WordFence-style filled, uppercase table heads that adapt to the theme. */
+    private static function _style(): string
+    {
+        return '<style>'
+             . '.tigershield-widget thead th{font-size:.68rem;text-transform:uppercase;letter-spacing:.03em;'
+             . 'font-weight:600;color:var(--bs-secondary-color);background:var(--bs-tertiary-bg);'
+             . 'border-bottom:1px solid var(--bs-border-color);padding:.3rem .5rem;white-space:nowrap}'
+             . '.tigershield-widget td{padding:.3rem .5rem;vertical-align:middle}'
+             . '</style>';
     }
 
     /**

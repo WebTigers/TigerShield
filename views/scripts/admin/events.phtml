@@ -64,7 +64,9 @@ document.addEventListener('DOMContentLoaded', function () {
         service: { module: 'tigershield', service: 'events', action: 'datatable' },
         order: [[0, 'desc']],
         language: { search: '', searchPlaceholder: 'Search IP, reason, route…', emptyTable: 'No traffic recorded yet.' },
-        extraData: function () { return { action: fAction.value }; },
+        // NB: the filter key must NOT be 'action' — that's the /api dispatch field (module/service/action),
+        // and extraData is merged last, so 'action' would clobber the 'datatable' method.
+        extraData: function () { return { event_action: fAction.value }; },
         columns: [
             { data: 'time', render: function (t, type) {
                 return type !== 'display' ? t : '<span class="text-nowrap text-body-secondary">' + esc(t) + '</span>';

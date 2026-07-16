@@ -16,7 +16,7 @@ class Tigershield_Service_Events extends Tiger_Service_Service
         $actions = ['observed', 'block', 'captcha', 'captcha_pass', 'allow'];
         $data = (new Tigershield_Model_Event())->datatable([
             'search'   => $dt['search'],
-            'action'   => in_array(($params['action'] ?? ''), $actions, true) ? (string) $params['action'] : '',
+            'action'   => in_array(($params['event_action'] ?? ''), $actions, true) ? (string) $params['event_action'] : '',
             'orderCol' => isset($dt['order'][0]) ? $dt['order'][0]['column'] : -1,
             'orderDir' => isset($dt['order'][0]) ? $dt['order'][0]['dir'] : '',
             'offset'   => $dt['start'],
