@@ -157,21 +157,29 @@ challenge** instead — `Tigershield_Service_Challenge`, wired into the gate's `
 
 ---
 
-## 7. The request WAF (BUILT 2026-07-16 — v1)
+## 7. The request WAF (BUILT 2026-07-16 — v1 + 5.1)
 
 A **rule engine** over the incoming request (`Tigershield_Service_Waf` + `rules/default-waf.php`) matching
-the common attack classes an endpoint WAF covers. **v1 inspects path / query / User-Agent / method — NOT
-the POST body** (that's where false positives live; body scanning + a `tigershield_rule` custom-rule editor
-are deferred to 5.1). A curated, high-signal ruleset, not a ModSecurity-CRS port. Measured cost:
-**~15µs/request** (worst case — a benign request running the whole ruleset). Validated: 10/10 attack
-classes caught, **0 false positives** on a benign battery. The design below is what shipped:
+the common attack classes an endpoint WAF covers. A curated, high-signal ruleset, not a ModSecurity-CRS
+port. Measured cost: **~15µs/request** (worst case — a benign request running the whole ruleset).
+Validated: attack classes caught, **0 false positives** on a benign battery. What shipped:
 
 - **Signatures:** SQLi, XSS, path traversal (`../`), PHP/LFI/RFI probes, known scanner user-agents,
-  disallowed methods, oversized/garbage requests.
-- **Rules as data.** A shipped default ruleset (a `rules/` file or seeded rows) + admin-editable
-  enable/disable + custom rules, so it updates without a deploy (the live-override pattern).
-- **Action per rule:** `block` | `captcha` | `log-only`. Ships mostly `log-only` on first install so it
-  never false-positives a real site before the operator has watched the traffic (§0 fail-open ethos).
+  disallowed methods, null bytes / control chars.
+- **Surfaces:** path / query / path+query / User-Agent / method — and, **opt-in, the POST body** (5.1).
+  Body scanning is off by default (`waf.body.enabled`) because legit form fields carry the very content
+  the content-categories look for; a **skip list** (`waf.body.skip`, code-default of rich-content field
+  names) plus always-skipped password / CSRF / captcha fields keep the false-positive rate down.
+- **Rules as data.** The shipped `rules/default-waf.php` ruleset (per-category live enable/disable) **plus
+  admin-authored custom rules** (5.1) — a `tigershield_rule` store + a `/tigershield/admin/rules` editor.
+  A custom rule matches one surface by literal substring or regex and carries its own action. The DB is
+  the source of truth; the gate reads a **compiled cache file** (`waf-custom.json`), rebuilt on every
+  write — no DB query on the hot path (the CrowdSec-blocklist discipline). Custom rules run after the
+  shipped ruleset (first match wins).
+- **Action per rule:** `block` | `captcha` | `log` (observe-only). Shipped high-confidence categories use
+  `waf.action`; the soft SQLi/XSS heuristics are hard-capped to log-only; custom rules carry their own
+  action, un-capped. Ships `log` on first install so it never false-positives a real site before the
+  operator has watched the traffic (§0 fail-open ethos).
 - **Never a bottleneck.** Rules run only after the (cheaper) IP checks pass, are compiled once, and are
   skipped entirely for allow-listed/static-asset requests.
 
@@ -214,7 +222,7 @@ Three tables (standard Tiger columns; migrations in `migrations/`):
 | Table | Holds |
 |---|---|
 | `tigershield_event` | one row per blocked/flagged/captcha/allow-logged request: ip, country, action, reason, route, ua, at |
-| `tigershield_rule` | WAF + IP/country rules: kind, pattern/target, action, enabled, source (`shipped`\|`user`) |
+| `tigershield_rule` | admin custom WAF rules (BUILT 5.1): label, target (surface), match_type (`contains`\|`regex`), pattern, action, enabled, sort_order |
 | `tigershield_decision` | the CrowdSec/local decision cache when APCu/Redis isn't available: ip/range, type, until |
 
 The **decision cache** prefers APCu/Redis (fast, shared across FPM workers) and falls back to this table
@@ -255,12 +263,12 @@ TigerShield/                       (its own PUBLIC repo; installs as application
   Bootstrap.php                    ; registers the firewall plugin + admin Settings entry + dashboard widget
   configs/  acl.ini  module.ini    ; admin-gated controller/services; defaults
   plugins/  Firewall.php           ; Tigershield_Plugin_Firewall — the front-controller gate (§1)
-  services/ Settings.php Events.php ; /api: save settings (validate→config), events datatable
+  services/ Settings.php Events.php Rules.php ; /api: save settings, events datatable, custom-rule CRUD
             Crowdsec.php RateLimit.php Waf.php   ; internal engines (NOT /api-dispatchable)
   models/   Event.php Rule.php Decision.php      ; the stores (§10)
   widgets/  Shield.php             ; Tigershield_Widget_Shield — the dashboard card (§15.6)
-  migrations/ <timestamp>_create_tigershield_event.php   ; timestamp versions, never 0001 (§15.6 note)
-  views/scripts/admin/ settings.phtml events.phtml
+  migrations/ <timestamp>_create_tigershield_event.php <timestamp>_create_tigershield_rule.php   ; timestamp versions, never 0001
+  views/scripts/admin/ settings.phtml events.phtml rules.phtml
   assets/   css/ js/               ; the admin widget + challenge page (served via public/_<base> symlink)
   media/    icon-256.png banner-1544x500.png screenshot-*.png   ; store/listing art (not runtime)
   languages/en/tigershield.php     ; semantic keys (tigershield.*)
@@ -312,10 +320,12 @@ TigerShield/                       (its own PUBLIC repo; installs as application
    `_challenge`/`_handleChallenge`: an interstitial (reCAPTCHA v2/v3), a solved POST verified up front,
    and an HMAC-signed, IP-bound clearance cookie that skips re-challenging for a window. Fail-open
    (fallback allow / provider fail-open). Provider-agnostic seam for hCaptcha/Turnstile. See §6.
-5. **Request WAF** — **BUILT (2026-07-16, v1).** `Tigershield_Service_Waf` + `rules/default-waf.php`:
-   9 curated categories over path/query/UA/method (no body scanning in v1), per-category admin toggles,
-   high-confidence → `waf.action`, soft SQLi/XSS heuristics capped at log-only. ~15µs/request, 0 FP on the
-   benign battery. Deferred to 5.1: `tigershield_rule` custom-rule editor + POST-body scanning.
+5. **Request WAF** — **BUILT (2026-07-16, v1 + 5.1).** `Tigershield_Service_Waf` + `rules/default-waf.php`:
+   9 curated categories over path/query/UA/method, per-category admin toggles, high-confidence →
+   `waf.action`, soft SQLi/XSS heuristics capped at log-only. ~15µs/request, 0 FP on the benign battery.
+   **5.1:** admin custom rules (`tigershield_rule` + `/tigershield/admin/rules` editor, compiled to a
+   `waf-custom.json` cache the gate reads — no DB on the hot path) + opt-in POST-body scanning with a
+   skip list. 17-assertion harness green.
 6. **Dashboard widget + polish** — the shield card, live-traffic filters, per-org tuning. *(Module side
    scaffolded; blocked on the platform dashboard-widget API — see §15.6.)*
 

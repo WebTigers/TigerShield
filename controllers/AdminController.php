@@ -42,6 +42,16 @@ class Tigershield_AdminController extends Tiger_Controller_Admin_Action
         $this->view->useDataTables = true;
     }
 
+    /** Custom WAF rules: a DataTables grid + add/edit form (rows + writes via Tigershield_Service_Rules). */
+    public function rulesAction()
+    {
+        $this->view->title         = 'Security — Custom Rules';
+        $this->view->useDataTables = true;
+        $this->view->targets       = Tigershield_Model_Rule::TARGETS;
+        $this->view->matches       = Tigershield_Model_Rule::MATCHES;
+        $this->view->actions       = Tigershield_Model_Rule::ACTIONS;
+    }
+
     /** Read the live tiger.tigershield.* config for prefilling the form. */
     protected static function _currentConfig()
     {

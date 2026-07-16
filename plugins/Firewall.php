@@ -88,10 +88,9 @@ class Tigershield_Plugin_Firewall extends Zend_Controller_Plugin_Abstract
         $hit = (new Tigershield_Service_Waf())->inspect($request);
         if (!$hit) { return null; }
 
-        // High-confidence → the configured action; soft heuristics never auto-block (log-only).
-        $action = ($hit['tier'] === 'soft') ? 'log' : self::_config('waf.action', 'log');
-        if (!in_array($action, ['log', 'captcha', 'block'], true)) { $action = 'log'; }
-        return ['action' => $action, 'reason' => 'waf: ' . $hit['label']];
+        // The engine resolves the action: shipped-high → waf.action, shipped-soft → log-only, custom →
+        // the rule's own action. A 'log' verdict is observe-only (recorded, never enforced).
+        return ['action' => $hit['action'], 'reason' => 'waf: ' . $hit['label']];
     }
 
     /**

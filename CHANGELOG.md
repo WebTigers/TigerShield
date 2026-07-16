@@ -5,6 +5,34 @@ this project uses [SemVer](https://semver.org) with a `-beta` stability suffix.
 
 ## [Unreleased]
 
+## [0.6.0-beta] — 2026-07-16
+
+### Added
+- **Custom WAF rules (phase 5.1)** — a `tigershield_rule` store + a `/tigershield/admin/rules` editor
+  (DataTables grid + create/edit modal). An admin authors their own signatures: match one request
+  **surface** (path / query / path+query / User-Agent / method / **body**) by a literal substring or a
+  regex, with the rule's **own action** (log / captcha / block — not tier-capped like the shipped soft
+  heuristics). Rules run *after* the shipped ruleset (first match wins).
+- **Cache-file architecture (no DB on the hot path)** — the DB is the source of truth; every write
+  recompiles the active rules to `storage/cache/tigershield/waf-custom.json`, which the gate reads (with
+  a one-shot lazy rebuild if missing) — the same "no I/O in the gate" discipline as the CrowdSec
+  blocklist. `Tigershield_Service_Rules` (`datatable` / `save` / `toggle` / `delete`) recompiles on every
+  mutation; regex rules are validated (must compile) on save.
+- **POST-body scanning (opt-in)** — the content categories (traversal / RCE / SQLi / XSS) and any
+  body-targeted custom rule also match form-field values. **Off by default** (`waf.body.enabled`) because
+  legit fields carry rich content; a **skip list** (`waf.body.skip`, code-default of rich-content field
+  names) plus always-skipped password / CSRF / captcha fields keep the false-positive rate down. A body
+  custom rule turns body scanning on for itself even when the global toggle is off.
+
+### Changed
+- `Tigershield_Service_Waf::inspect()` now resolves the **action** itself (returns `{label, action}`);
+  the gate uses it directly instead of re-deriving from tier. Body surface is built only when needed.
+
+### Verified
+- 17-assertion harness on tiger-dev: custom literal/regex matches + actions, disabled-rule skip, body
+  scanning + skip-list + always-skip fields, shipped body categories, shipped-rule regression, and a
+  benign-traffic battery — **0 false positives**.
+
 ## [0.5.0-beta] — 2026-07-16
 
 ### Added
@@ -28,7 +56,7 @@ this project uses [SemVer](https://semver.org) with a `-beta` stability suffix.
   event log (time, IP, country, action, reason, route) with a search box and an action filter. Fixes the
   dashboard widget's "View live traffic" link, which previously 404'd (the view didn't exist).
 - `Tigershield_Model_Event::datatable()` + a real `Tigershield_Service_Events::datatable` (was a stub).
-- **Dashboard widget — the "security is working" tables** (WordFence-style): Top offending IPs (with
+- **Dashboard widget — the "security is working" tables** (endpoint-security-plugin style): Top offending IPs (with
   geolocated country), Top countries, and Top targeted logins (account, tries, real-user flag) over the
   last 7 days — instead of a couple of stat numbers. Powered by `Event::topIps()`/`countSince()`,
   `Tiger_Model_Login::topFailures()` (tiger-core), and best-effort cached IP geolocation. Themed
@@ -36,7 +64,7 @@ this project uses [SemVer](https://semver.org) with a `-beta` stability suffix.
 
 ### Changed
 - The dashboard widget now renders in the platform's dashboard grid (tiger-core ≥ 0.10.0-beta) with
-  WordFence-style chrome — the whole card header is the drag handle, with a collapse toggle.
+  security-plugin-style chrome — the whole card header is the drag handle, with a collapse toggle.
 
 ## [0.3.0-beta] — 2026-07-16
 

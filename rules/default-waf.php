@@ -37,6 +37,7 @@ return [
     // 3 — path traversal / LFI / PHP stream wrappers.
     'traversal' => [
         'label' => 'Path traversal / LFI', 'tier' => 'high', 'in' => 'pathquery',
+        'body' => true,
         'contains' => ['/etc/passwd', '/etc/shadow', '/proc/self/environ', 'php://', 'file://', 'data://', 'expect://', 'phar://', 'zip://'],
         'regex'    => ['~\.\.[/\\\\]~', '~%2e%2e(?:%2f|%5c|/|\\\\)~i'],
     ],
@@ -44,6 +45,7 @@ return [
     // 4 — command / code injection.
     'rce' => [
         'label' => 'Command injection', 'tier' => 'high', 'in' => 'query',
+        'body' => true,
         'regex' => [
             '~\b(?:system|exec|passthru|shell_exec|popen|proc_open|pcntl_exec)\s*\(~i',
             '~[;|&`]\s*(?:wget|curl|nc|ncat|bash|sh|python|perl|cat|chmod|rm)\b~i',
@@ -76,6 +78,7 @@ return [
     // 8 — SQL injection heuristics. SOFT: always log-only (a legit search may contain these words).
     'sqli' => [
         'label' => 'SQL injection heuristic', 'tier' => 'soft', 'in' => 'query',
+        'body' => true,
         'regex' => [
             '~\bunion\s+(?:all\s+)?select\b~i',
             '~\b(?:sleep|benchmark|pg_sleep|waitfor\s+delay)\s*\(~i',
@@ -89,6 +92,7 @@ return [
     // 9 — reflected-XSS heuristics. SOFT: always log-only.
     'xss' => [
         'label' => 'XSS heuristic', 'tier' => 'soft', 'in' => 'query',
+        'body' => true,
         'regex' => [
             '~<script\b~i',
             '~javascript:~i',

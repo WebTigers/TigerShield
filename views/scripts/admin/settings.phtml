@@ -121,7 +121,19 @@ $cs   = isset($this->crowdsec) && is_array($this->crowdsec) ? $this->crowdsec : 
                         <label class="form-check-label small" for="ts-wafcat-<?= $ck ?>"><?= htmlspecialchars($cl) ?></label>
                     </div>
                     <?php endforeach; ?>
-                    <p class="form-text small mb-0">Soft heuristics (SQLi/XSS) only ever log — they never auto-block.</p>
+                    <p class="form-text small mb-2">Soft heuristics (SQLi/XSS) only ever log — they never auto-block.</p>
+
+                    <hr class="my-3">
+                    <div class="form-check form-switch mb-1">
+                        <input class="form-check-input" type="checkbox" role="switch" id="ts-waf-body" name="tiger.tigershield.waf.body.enabled" value="1" <?= $get('waf.body.enabled', '0') === '1' ? 'checked' : '' ?>>
+                        <label class="form-check-label" for="ts-waf-body">Also scan POST-request bodies</label>
+                    </div>
+                    <p class="form-text small mb-2">Off by default — legit form fields carry rich content and are the main false-positive source. Turn on once you know your forms.</p>
+                    <label class="form-label small mb-1" for="ts-waf-body-skip">Fields to skip when scanning bodies</label>
+                    <input type="text" class="form-control form-control-sm mb-1" id="ts-waf-body-skip" name="tiger.tigershield.waf.body.skip" value="<?= htmlspecialchars($get('waf.body.skip', Tigershield_Service_Waf::DEFAULT_BODY_SKIP)) ?>" placeholder="body,content,message,description,…">
+                    <p class="form-text small mb-3">Comma-separated field names exempt from the body scan. Password / CSRF / captcha fields are always skipped.</p>
+
+                    <a href="/tigershield/admin/rules" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-list-check me-2"></i>Manage custom rules</a>
                 </div>
             </div>
         </div>
@@ -201,6 +213,7 @@ document.getElementById('ts-save').addEventListener('click', function () {
     ['tiger.tigershield.crowdsec.enabled','tiger.tigershield.crowdsec.contribute','tiger.tigershield.ratelimit.enabled','tiger.tigershield.waf.enabled',
      'tiger.tigershield.waf.cat.files','tiger.tigershield.waf.cat.cms','tiger.tigershield.waf.cat.traversal','tiger.tigershield.waf.cat.rce',
      'tiger.tigershield.waf.cat.nullbyte','tiger.tigershield.waf.cat.method','tiger.tigershield.waf.cat.scanners','tiger.tigershield.waf.cat.sqli','tiger.tigershield.waf.cat.xss',
+     'tiger.tigershield.waf.body.enabled',
      'recaptcha_enabled','recaptcha_fail_open','recaptcha_hide_badge'].forEach(function (k) {
         if (!fd.has(k)) { fd.set(k, '0'); }
     });

@@ -2,7 +2,7 @@
   "schema": "tiger.module/v1",
   "slug": "tigershield",
   "name": "TigerShield",
-  "version": "0.5.0-beta",
+  "version": "0.6.0-beta",
   "description": "A plugin-layer web application firewall for Tiger — CrowdSec malicious-IP blocking, captcha gating, rate-limiting, and login protection, all at the PHP layer (no root, no daemon). Built for shared hosting.",
   "author": { "name": "WebTigers", "url": "https://webtigers.com" },
   "homepage": "https://webtigers.com/tigershield",

@@ -36,6 +36,8 @@ class Tigershield_Service_Settings extends Tiger_Service_Service
                 'tiger.tigershield.waf.cat.scanners',
                 'tiger.tigershield.waf.cat.sqli',
                 'tiger.tigershield.waf.cat.xss',
+                'tiger.tigershield.waf.body.enabled',
+                'tiger.tigershield.waf.body.skip',
             ];
             $this->_transaction(function () use ($config, $keys, $params) {
                 foreach ($keys as $k) {

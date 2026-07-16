@@ -24,4 +24,10 @@ return [
     'tigershield.crowdsec.not_registered' => 'Not registered',
     'tigershield.crowdsec.last_sync'     => 'Last sync',
     'tigershield.crowdsec.blocklist'     => 'Blocklist',
+    'tigershield.rule.saved'         => 'Rule saved.',
+    'tigershield.rule.deleted'       => 'Rule deleted.',
+    'tigershield.rule.err_label'     => 'Give the rule a label.',
+    'tigershield.rule.err_pattern'   => 'Enter a pattern to match.',
+    'tigershield.rule.err_target'    => 'Choose a valid request surface.',
+    'tigershield.rule.err_regex'     => 'That regular expression is not valid.',
 ];
