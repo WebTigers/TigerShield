@@ -12,6 +12,11 @@ this project uses [SemVer](https://semver.org) with a `-beta` stability suffix.
   event log (time, IP, country, action, reason, route) with a search box and an action filter. Fixes the
   dashboard widget's "View live traffic" link, which previously 404'd (the view didn't exist).
 - `Tigershield_Model_Event::datatable()` + a real `Tigershield_Service_Events::datatable` (was a stub).
+- **Dashboard widget — the "security is working" tables** (WordFence-style): Top offending IPs (with
+  geolocated country), Top countries, and Top targeted logins (account, tries, real-user flag) over the
+  last 7 days — instead of a couple of stat numbers. Powered by `Event::topIps()`/`countSince()`,
+  `Tiger_Model_Login::topFailures()` (tiger-core), and best-effort cached IP geolocation. Themed
+  (light/dark) instead of hardcoded colors.
 
 ### Changed
 - The dashboard widget now renders in the platform's dashboard grid (tiger-core ≥ 0.10.0-beta) with

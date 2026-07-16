@@ -34,6 +34,44 @@ class Tigershield_Model_Event extends Tiger_Model_Table
     private static $_orderCols = ['created_at', 'ip', 'country', 'action', 'reason', 'route'];
 
     /**
+     * The top offending IPs by event count over a window — the dashboard "who the shield is stopping"
+     * signal. Counts all flagged events (in learn mode these are `observed`).
+     *
+     * @param  int $sinceSeconds look-back window (default 7 days)
+     * @param  int $limit        max rows
+     * @return array<int,array{ip:string, hits:int}>
+     */
+    public function topIps($sinceSeconds = 604800, $limit = 10)
+    {
+        $db    = $this->getAdapter();
+        $since = date('Y-m-d H:i:s', time() - max(60, (int) $sinceSeconds));
+        $rows  = $db->fetchAll(
+            $db->select()
+                ->from($this->_name, ['ip', 'hits' => new Zend_Db_Expr('COUNT(*)')])
+                ->where('deleted = ?', 0)
+                ->where('created_at >= ?', $since)
+                ->where("ip <> ''")
+                ->group('ip')
+                ->order(new Zend_Db_Expr('COUNT(*) DESC'))
+                ->limit(max(1, (int) $limit))
+        );
+        return array_map(function ($r) {
+            return ['ip' => (string) $r['ip'], 'hits' => (int) $r['hits']];
+        }, $rows);
+    }
+
+    /** Total flagged events since a timestamp (optionally only enforce-worthy actions). */
+    public function countSince($sinceSeconds, array $actions = [])
+    {
+        $db    = $this->getAdapter();
+        $since = date('Y-m-d H:i:s', time() - max(60, (int) $sinceSeconds));
+        $sel   = $db->select()->from($this->_name, [new Zend_Db_Expr('COUNT(*)')])
+            ->where('deleted = ?', 0)->where('created_at >= ?', $since);
+        if ($actions) { $sel->where('action IN (?)', $actions); }
+        return (int) $db->fetchOne($sel);
+    }
+
+    /**
      * Server-side DataTables query for the live-traffic view. Returns ['rows','total','filtered'].
      * Injection-safe (query builder + quoteInto); newest first by default.
      *

@@ -41,76 +41,137 @@ class Tigershield_Widget_Shield
      */
     public function data(): array
     {
+        $window = 604800;   // 7 days — matches WordFence's "activity in the past week"
         $out = [
-            'mode'         => 'learn',
-            'blocks_today' => 0,
-            'events_today' => 0,
-            'top_ip'       => null,
-            'crowdsec'     => 'off',
+            'mode'          => 'learn',
+            'crowdsec'      => 'off',
+            'flagged'       => 0,
+            'top_ips'       => [],   // [{ip, country, hits}]
+            'top_countries' => [],   // [{country, hits}]
+            'top_failed'    => [],   // [{identifier, attempts, existing}]
         ];
+
         try {
             if (Zend_Registry::isRegistered('Zend_Config')) {
                 $cfg = Zend_Registry::get('Zend_Config');
                 $ts  = $cfg->get('tiger') ? $cfg->get('tiger')->get('tigershield') : null;
                 if ($ts) {
-                    $out['mode']     = (string) ($ts->get('mode') ?: 'learn');
-                    $cs              = $ts->get('crowdsec');
+                    $out['mode'] = (string) ($ts->get('mode') ?: 'learn');
+                    $cs = $ts->get('crowdsec');
                     $out['crowdsec'] = ($cs && (string) $cs->get('enabled') === '1') ? 'on' : 'off';
                 }
             }
-        } catch (Throwable $e) { /* fall through to the zero-state */ }
+        } catch (Throwable $e) { /* zero-state */ }
 
+        // Top offending IPs (+ geolocated countries, aggregated) — the "who the shield is stopping" view.
         try {
-            $db    = Zend_Db_Table_Abstract::getDefaultAdapter();
-            $since = date('Y-m-d 00:00:00');
-            if ($db) {
-                $out['events_today'] = (int) $db->fetchOne(
-                    'SELECT COUNT(*) FROM tigershield_event WHERE created_at >= ?', $since
-                );
-                // In enforce mode the action is the real verdict; in learn it is logged as "observed".
-                $out['blocks_today'] = (int) $db->fetchOne(
-                    'SELECT COUNT(*) FROM tigershield_event WHERE created_at >= ? AND action IN (?, ?)',
-                    [$since, 'block', 'captcha']
-                );
-                $out['top_ip'] = $db->fetchOne(
-                    'SELECT ip FROM tigershield_event WHERE created_at >= ? GROUP BY ip'
-                    . ' ORDER BY COUNT(*) DESC LIMIT 1', $since
-                ) ?: null;
+            $event = new Tigershield_Model_Event();
+            $out['flagged'] = $event->countSince($window);
+            $countries = [];
+            foreach ($event->topIps($window, 10) as $r) {
+                $cc = self::_geo($r['ip']);
+                if (count($out['top_ips']) < 5) {
+                    $out['top_ips'][] = ['ip' => $r['ip'], 'country' => $cc, 'hits' => $r['hits']];
+                }
+                if ($cc !== '') { $countries[$cc] = ($countries[$cc] ?? 0) + $r['hits']; }
             }
-        } catch (Throwable $e) { /* table may not exist yet / no adapter — zero-state */ }
+            arsort($countries);
+            foreach (array_slice($countries, 0, 5, true) as $cc => $hits) {
+                $out['top_countries'][] = ['country' => $cc, 'hits' => $hits];
+            }
+        } catch (Throwable $e) { /* zero-state */ }
+
+        // Top targeted accounts by failed sign-ins — straight off the login audit log.
+        try {
+            if (class_exists('Tiger_Model_Login')) {
+                $out['top_failed'] = (new Tiger_Model_Login())->topFailures($window, 5);
+            }
+        } catch (Throwable $e) { /* zero-state */ }
 
         return $out;
     }
 
-    /** Self-contained card HTML built from data(). Minimal + inline so it needs no view resolution. */
+    /** The card BODY — the WordFence-style "security is working" tables. Themed Bootstrap (light/dark). */
     public function render(): string
     {
         $d    = $this->data();
-        $enf  = $d['mode'] === 'enforce';
-        $tone = $enf ? '#22c55e' : ($d['mode'] === 'off' ? '#9aa4b2' : '#f59e0b');
+        $tone = $d['mode'] === 'enforce' ? 'success' : ($d['mode'] === 'off' ? 'secondary' : 'warning');
         $mode = htmlspecialchars(ucfirst($d['mode']), ENT_QUOTES);
-        $ip   = $d['top_ip'] ? htmlspecialchars($d['top_ip'], ENT_QUOTES) : '—';
-        $cs   = $d['crowdsec'] === 'on' ? 'Connected' : 'Off';
+        $cs   = $d['crowdsec'] === 'on' ? 'On' : 'Off';
 
-        return '<div class="tigershield-widget" style="display:flex;flex-direction:column;gap:.75rem">'
-             . '<div style="display:flex;align-items:center;gap:.5rem">'
-             . '<i class="fa-solid ' . $this->icon() . '" style="color:' . $tone . '"></i>'
-             . '<strong>Mode:</strong> <span style="color:' . $tone . '">' . $mode . '</span></div>'
-             . '<div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;text-align:center">'
-             . self::_stat($d['blocks_today'], 'blocked today')
-             . self::_stat($d['events_today'], 'events today')
-             . '</div>'
-             . '<div style="display:flex;justify-content:space-between;color:#9aa4b2;font-size:.9em">'
-             . '<span>Top IP: <code>' . $ip . '</code></span><span>CrowdSec: ' . $cs . '</span></div>'
-             . '<a href="/tigershield/admin/events" style="font-size:.9em">View live traffic →</a>'
-             . '</div>';
+        $h  = '<div class="d-flex justify-content-between align-items-center small mb-2">'
+            . '<span><strong>Mode:</strong> <span class="text-' . $tone . '">' . $mode . '</span></span>'
+            . '<span class="text-body-secondary">CrowdSec: ' . $cs . '</span></div>'
+            . '<p class="small text-body-secondary mb-3"><strong class="text-body">' . (int) $d['flagged']
+            . '</strong> events flagged in the last 7 days.</p>';
+
+        $any = false;
+
+        if (!empty($d['top_ips'])) {
+            $any  = true;
+            $rows = '';
+            foreach ($d['top_ips'] as $r) {
+                $rows .= '<tr><td><code>' . htmlspecialchars($r['ip'], ENT_QUOTES) . '</code></td><td>'
+                       . ($r['country'] !== '' ? '<span class="badge text-bg-light text-uppercase">' . htmlspecialchars($r['country'], ENT_QUOTES) . '</span>' : '<span class="text-body-secondary">—</span>')
+                       . '</td><td class="text-end">' . (int) $r['hits'] . '</td></tr>';
+            }
+            $h .= self::_table('Top offending IPs', '<tr><th>IP</th><th>Country</th><th class="text-end">Hits</th></tr>', $rows);
+        }
+
+        if (!empty($d['top_countries'])) {
+            $any  = true;
+            $rows = '';
+            foreach ($d['top_countries'] as $r) {
+                $rows .= '<tr><td><span class="badge text-bg-light text-uppercase">' . htmlspecialchars($r['country'], ENT_QUOTES)
+                       . '</span></td><td class="text-end">' . (int) $r['hits'] . '</td></tr>';
+            }
+            $h .= self::_table('Top countries', '<tr><th>Country</th><th class="text-end">Hits</th></tr>', $rows);
+        }
+
+        if (!empty($d['top_failed'])) {
+            $any  = true;
+            $rows = '';
+            foreach ($d['top_failed'] as $r) {
+                $ex = !empty($r['existing']) ? '<span class="text-success">Yes</span>' : '<span class="text-danger">No</span>';
+                $rows .= '<tr><td class="text-truncate" style="max-width:9rem">' . htmlspecialchars($r['identifier'], ENT_QUOTES)
+                       . '</td><td class="text-end">' . (int) $r['attempts'] . '</td><td class="text-center">' . $ex . '</td></tr>';
+            }
+            $h .= self::_table('Top targeted logins', '<tr><th>Account</th><th class="text-end">Tries</th><th class="text-center">Real?</th></tr>', $rows);
+        }
+
+        if (!$any) {
+            $h .= '<p class="small text-body-secondary mb-2"><i class="fa-regular fa-circle-check me-1"></i>The shield is watching — nothing flagged in the last 7 days.</p>';
+        }
+
+        $h .= '<a href="/tigershield/admin/events" class="small text-decoration-none">View live traffic &rarr;</a>';
+        return '<div class="tigershield-widget">' . $h . '</div>';
     }
 
-    private static function _stat($n, $label): string
+    /** A small titled table (themed). $thead + $rows are trusted HTML built by render(). */
+    private static function _table(string $title, string $thead, string $rows): string
     {
-        return '<div><div style="font-size:1.6rem;font-weight:700">' . (int) $n . '</div>'
-             . '<div style="color:#9aa4b2;font-size:.85em">' . htmlspecialchars($label, ENT_QUOTES)
-             . '</div></div>';
+        return '<div class="mb-3"><div class="fw-semibold small mb-1">' . htmlspecialchars($title, ENT_QUOTES) . '</div>'
+             . '<table class="table table-sm small mb-0"><thead>' . $thead . '</thead><tbody>' . $rows . '</tbody></table></div>';
+    }
+
+    /**
+     * Best-effort ISO country for an IP, cached in APCu (IPs don't move countries). Bounded to the few
+     * IPs the widget shows; fail-soft to '' when geolocation is unconfigured/unavailable. Never networks
+     * on a cache hit, so a warm dashboard is a pure DB read.
+     */
+    private static function _geo(string $ip): string
+    {
+        if ($ip === '' || !class_exists('Tiger_Location')) { return ''; }
+        $ck   = 'tigershield:geo:' . md5($ip);
+        $apcu = function_exists('apcu_fetch') && (bool) ini_get('apc.enabled');
+        if ($apcu) { $v = @apcu_fetch($ck); if (is_string($v)) { return $v; } }
+        $cc = '';
+        try {
+            $place = (new Tiger_Location())->ip($ip);
+            if ($place && $place->country) { $cc = strtoupper(substr((string) $place->country, 0, 2)); }
+        } catch (Throwable $e) { /* geolocation is best-effort */ }
+        if ($apcu) { @apcu_store($ck, $cc, 86400); }
+        return $cc;
     }
 
     /**
