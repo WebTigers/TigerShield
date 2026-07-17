@@ -5,6 +5,15 @@ this project uses [SemVer](https://semver.org) with a `-beta` stability suffix.
 
 ## [Unreleased]
 
+## [0.7.0-beta] — 2026-07-17
+
+### Added
+- **Events log `domain` + `org_id`.** Every shield event now records the request host and the org that
+  owns that site (`Tiger_Model_Org::siteOrgId()`), so a multi-site install can attribute and filter Live
+  Traffic per tenant/domain. `org_id` is the SITE org, set explicitly (an attacker is anonymous, so it's
+  not the request's actor org). Guarded — degrades to `''` on a tiger-core without the site-org resolver.
+  Migration adds the two columns (indexed).
+
 ## [0.6.0-beta] — 2026-07-16
 
 ### Added

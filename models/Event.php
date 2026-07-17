@@ -27,6 +27,8 @@ class Tigershield_Model_Event extends Tiger_Model_Table
             'reason'  => (string) ($data['reason'] ?? ''),
             'route'   => substr((string) ($data['route'] ?? ''), 0, 191),
             'ua'      => substr((string) ($data['ua'] ?? ''), 0, 255),
+            'domain'  => substr((string) ($data['domain'] ?? ''), 0, 191),
+            'org_id'  => (string) ($data['org_id'] ?? ''),   // the SITE's org (set explicitly by the gate)
         ]);
     }
 

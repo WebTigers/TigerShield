@@ -249,8 +249,19 @@ class Tigershield_Plugin_Firewall extends Zend_Controller_Plugin_Abstract
                 'reason' => $decision['reason'] ?? '',
                 'route'  => self::_path($request),
                 'ua'     => (string) ($_SERVER['HTTP_USER_AGENT'] ?? ''),
+                // Which SITE was hit — the request host + the org that owns it. Lets a multi-site install
+                // filter Live Traffic per tenant/domain. org_id is the SITE org (not the request's actor
+                // org — an attacker is anonymous), so it's set explicitly rather than auto-stamped.
+                'domain' => (string) $request->getHttpHost(),
+                'org_id' => self::_siteOrgId(),
             ]);
         } catch (Throwable $e) { /* logging must never break the gate */ }
+    }
+
+    /** The org owning the site this request hit (multi-site event scoping); '' on a core without the resolver. */
+    protected static function _siteOrgId()
+    {
+        return method_exists('Tiger_Model_Org', 'siteOrgId') ? (string) Tiger_Model_Org::siteOrgId() : '';
     }
 
     /** Is this a POST of the captcha interstitial (a flagged visitor solving the challenge)? */
