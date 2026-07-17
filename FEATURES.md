@@ -4,10 +4,11 @@
 blocking (CrowdSec), captcha gating, rate-limiting, and login protection — all at the PHP layer, with
 no root and no daemon. One integrated shield instead of a stack of plugins.*
 
-> **Status: design-of-record.** This records the decisions and the feature surface so we don't drift as
-> the code lands. Built so far: the fail-open front-controller gate (learn mode), login protection,
-> general rate limiting, the admin Security screen, and the events store (§15 phases 1–2). Everything
-> below marked "planned" is the target. Free + BSD-licensed; see [CHANGELOG.md](CHANGELOG.md).
+> **Status: v1 built (v0.6.0-beta).** All six build phases have shipped: the fail-open front-controller
+> gate (learn mode), login protection + rate limiting, the CrowdSec CAPI client + cached blocklist,
+> captcha gating, the request WAF (v1 + custom rules + opt-in body scanning), the admin Security screen +
+> Live Traffic, and the dashboard shield card. Remaining items are explicitly deferred (§16: per-row
+> allow/deny on Live Traffic, per-org tuning). Free + BSD-licensed; see [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
@@ -100,17 +101,20 @@ is the always-available store).
 
 ---
 
-## 4. Rate limiting (planned)
+## 4. Rate limiting (BUILT 2026-07-16)
 
-- **Buckets by (IP) and (IP + route-class).** A login POST, an `/api` call, and a page view have
-  different sane limits; the classifier maps the request to a bucket.
-- **Sliding-window counters** in the lazy scoped store (a `Tiger_Model_Option`-style tier / cache — NOT
-  the eager `config` table; [[config-discipline]]). Cheap increment + read.
-- **Escalation ladder, not a cliff.** Over soft limit → **slow** (tiny delay) or **captcha**; over hard
-  limit → **block** for a cooldown. Captcha lets a real user through; a bot stalls.
-- **Built on the audit substrate.** Login-specific limits read the existing login audit log (FEATURES:
-  "the substrate for rate-limiting and anomaly detection"), so credential-stuffing is caught with data
-  Tiger already records.
+Two independent limiters (`Tigershield_Service_RateLimit` + the gate), both fail-open and learn-mode-aware:
+
+- **Login protection** reads Tiger's **login audit log** (`Tiger_Model_Login`) — per-**IP** (distributed
+  brute force) and per-**account** (credential stuffing), each with its own threshold/window. No cache
+  required, so it works on any host; complements Tiger's own per-account lockout, and is **2FA-aware** (a
+  legitimate post-password 2FA step is never counted as a failure). `login.action` = `block` (429) or
+  `captcha`.
+- **General per-request rate limiting** — **APCu-backed** fixed-window counters keyed by IP, a graceful
+  no-op where APCu isn't present (no hard dependency). Over the limit → the configured action.
+- **Enforcement is a real 429** block page; **learn mode logs only**. No external dependency.
+
+Deferred (§16): route-class buckets and an optional per-admin country/allow-list.
 
 ---
 
@@ -185,48 +189,49 @@ Validated: attack classes caught, **0 false positives** on a benign battery. Wha
 
 ---
 
-## 8. Login protection (planned)
+## 8. Login protection (BUILT 2026-07-16)
 
-The single most-attacked surface. TigerShield hardens `/login` (`/auth/login`) specifically:
+The single most-attacked surface, hardened at `/auth/login` (this is the login half of the §4 limiter):
 
-- **Attempt caps + throttle** per IP and per account (credential stuffing sprays many accounts from one
-  IP — catch both dimensions), building on Tiger's existing lockout + audit log.
-- **Captcha after N fails** on the login form (the reCAPTCHA element already supports this).
-- **Optional country/allow-list for the admin login** (a common endpoint-firewall ask: "only let my country hit
-  wp-admin").
+- **Attempt caps + throttle** per IP and per account, from Tiger's login audit log; complements the
+  platform's per-account lockout.
+- **Captcha after N fails** (`login.action = captcha`) — the reCAPTCHA path in §6.
 - **2FA-aware:** never counts a legitimate post-password 2FA step as a failure.
+
+Deferred (§16): an optional country/allow-list for the admin login ("only let my country hit the admin").
 
 ---
 
-## 9. Admin — settings page + shield dashboard (planned)
+## 9. Admin — settings page + shield dashboard (BUILT 2026-07-16)
 
 Built per Tiger's [ADMIN.md](https://github.com/WebTigers/Tiger) template (one shell, one save pattern):
 
 - **Settings screen** (`/tigershield/admin/settings`) — cards for: **Mode** (Off / Learn / Enforce),
-  **CrowdSec** (enroll key, refresh status + "last synced", blocklist size), **Rate limits** (the
-  bucket thresholds), **Login protection**, **Country/IP rules**, **WAF ruleset** (toggle groups),
-  **Captcha** (which provider). Saved over `/api` (validate → config tier), no deploy.
+  **CrowdSec** (enroll key, refresh status + "last synced", blocklist size), **Rate limits**, **WAF
+  ruleset** (per-category toggles + body scanning + a link to the custom-rule editor), **Captcha**.
+  Saved over `/api` (validate → config tier), no deploy.
+- **Custom-rule editor** (`/tigershield/admin/rules`) — a DataTables grid + create/edit modal for
+  admin-authored WAF rules (§7 / 5.1).
 - **Live traffic / events** (`/tigershield/admin/events`) — a server-side DataTables grid of recent
-  events (time, IP, country, action, reason, path), filterable by action — a "live traffic" view. Row actions: allow-list this IP, block this IP.
+  events (time, IP, country, action, reason, route), filterable by action. **Read-only** — per-row
+  allow-list / block-this-IP actions are deferred (they land with a manual allow/deny store; see §16).
 - **Dashboard widget** — a module-registered shield card (mode, blocks today, top offending IP, CrowdSec
-  sync) on the main admin dashboard. TigerShield's side is built (`widgets/Shield.php` +
-  `Bootstrap::_initDashboardWidget`); it registers only when the **platform** dashboard-widget API
-  exists, so it's a safe no-op until that lands (§15.6 + the `backlog-dashboard-widgets` note).
+  sync). Registers via `Bootstrap::_initDashboardWidget` when `Tiger_Dashboard` is present — which
+  **shipped in tiger-core 0.10.0-beta** — so the card now renders live on the admin dashboard grid.
 
 ---
 
-## 10. Data model (planned)
+## 10. Data model (BUILT — event + rule; decision table not needed)
 
-Three tables (standard Tiger columns; migrations in `migrations/`):
+Standard Tiger columns; migrations in `migrations/` (timestamp-versioned):
 
 | Table | Holds |
 |---|---|
-| `tigershield_event` | one row per blocked/flagged/captcha/allow-logged request: ip, country, action, reason, route, ua, at |
-| `tigershield_rule` | admin custom WAF rules (BUILT 5.1): label, target (surface), match_type (`contains`\|`regex`), pattern, action, enabled, sort_order |
-| `tigershield_decision` | the CrowdSec/local decision cache when APCu/Redis isn't available: ip/range, type, until |
+| `tigershield_event` (BUILT) | one row per blocked/flagged/captcha/allow-logged request: ip, country, action, reason, route, ua, at |
+| `tigershield_rule` (BUILT 5.1) | admin custom WAF rules: label, target (surface), match_type (`contains`\|`regex`), pattern, action, enabled, sort_order |
+| ~~`tigershield_decision`~~ (dropped) | not built — the CrowdSec blocklist lives in an atomic JSON **file cache** (`Tigershield_Service_Blocklist`, memoized + APCu-warmed), which serves the gate with no DB row at all |
 
-The **decision cache** prefers APCu/Redis (fast, shared across FPM workers) and falls back to this table
-+ a compact file so it works on the barest host. Events are pruned on a rolling window (config).
+Events are pruned on a rolling window (config).
 
 ---
 
@@ -326,35 +331,25 @@ TigerShield/                       (its own PUBLIC repo; installs as application
    **5.1:** admin custom rules (`tigershield_rule` + `/tigershield/admin/rules` editor, compiled to a
    `waf-custom.json` cache the gate reads — no DB on the hot path) + opt-in POST-body scanning with a
    skip list. 17-assertion harness green.
-6. **Dashboard widget + polish** — the shield card, live-traffic filters, per-org tuning. *(Module side
-   scaffolded; blocked on the platform dashboard-widget API — see §15.6.)*
+6. **Dashboard widget + polish** — **BUILT (2026-07-16).** The shield card renders on the platform
+   dashboard grid (the platform API landed — see §15.6) and the live-traffic view has an action filter.
+   Deferred (not creep for v1): per-row allow/deny actions on Live Traffic + per-org tuning (§16).
 
-### 15.6 Dashboard widget — module side built, platform side pending
+### 15.6 Dashboard widget — BUILT (platform API shipped in tiger-core 0.10.0-beta)
 
-The goal is WordPress-parity: a module surfaces its own at-a-glance card on the admin dashboard the same
-way a WP plugin calls `wp_add_dashboard_widget()`. TigerShield's side is written and ready; the
-**platform** registry + grid it plugs into **has not been built yet** (tracked in the
-`backlog-dashboard-widgets` roadmap note — module-registered widgets, even-column widths, collapsible
-drag-drop layout, per-user order in the lazy `option` tier).
+The goal was WordPress-parity: a module surfaces its own at-a-glance card on the admin dashboard the same
+way a WP plugin calls `wp_add_dashboard_widget()`. **Both sides now exist** — the platform registry + grid
+shipped in **tiger-core 0.10.0-beta** (`Tiger_Dashboard` + the lazy `Tiger_Model_Option` layout store +
+the Muuri drag-drop grid), so TigerShield's card renders live.
 
-**What the module ships now:**
+**What the module ships:**
 - `widgets/Shield.php` — `Tigershield_Widget_Shield`: `title()`, `icon()`, `data()` (cheap, defensive,
   fail-open zero-state — mode, blocks today, events today, top IP, CrowdSec status), `render()`
-  (self-contained card HTML), and `descriptor()` (the registration metadata: id, module, title, icon,
-  widget class, ACL `resource`, grid `width`, `order`, `refresh`).
-- `Bootstrap::_initDashboardWidget()` — registers the descriptor **only** `if (class_exists('Tiger_Dashboard'))`,
-  so today it is a harmless no-op. Nothing to change here when the platform lands.
-
-**What the platform must add (the ask for the `backlog-dashboard-widgets` build):**
-- A **registry** — `Tiger_Dashboard::registerWidget(array $descriptor)` (module Bootstraps call it), and
-  a dashboard controller/view that collects registered widgets, ACL-filters by each descriptor's
-  `resource`, sorts by `order`, lays them out in the even-column grid, and renders each via its widget
-  class (`data()`/`render()`), honoring `refresh` for client-side polling.
-- Optional **`Tiger_Dashboard_Widget_Abstract`** base (caching of `data()`, `.phtml` partial rendering,
-  a standard card chrome) — if it ships, `Tigershield_Widget_Shield` can `extends` it and drop its inline
-  HTML; the descriptor shape stays the same, so it's non-breaking.
-- The **descriptor contract** above is the interface to lock first; every module (not just TigerShield)
-  registers against it.
+  (self-contained card HTML), and `descriptor()` (registration metadata: id, module, title, icon, widget
+  class, ACL `resource`, grid `width`, `order`, `refresh`).
+- `Bootstrap::_initDashboardWidget()` — registers the descriptor `if (class_exists('Tiger_Dashboard'))`.
+  On tiger-core ≥ 0.10.0-beta that's now true, so the card appears; on an older core it stays a harmless
+  no-op. Nothing to change here.
 
 ---
 
