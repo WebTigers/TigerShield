@@ -3,9 +3,10 @@
 // Copyright (c) 2026 WebTigers. Tiger™ and WebTigers™ are trademarks of WebTigers.
 /**
  * TigerShield settings — the security screen, in the admin shell. Per ADMIN.md:
- * header + feedback mount + cards + a save wired through the house UI primitives (no page-POST).
- * Semantic Bootstrap only — reskinnable. Scaffold: the fields map to the tiger.tigershield.* config
- * keys Tigershield_Service_Settings::save handles; the deeper controls arrive with their phases.
+ * header + feedback mount + tabbed sections + a save wired through the house UI primitives (no
+ * page-POST). Semantic Bootstrap only — reskinnable. Each security concern is a tab (Protection
+ * mode · CrowdSec · Rate limiting · Firewall · Captcha); one shared form + one Save posts every
+ * tab's fields to Tigershield_Service_Settings::save over /api.
  */
 $s    = isset($this->settings) ? $this->settings : [];
 $get  = function ($path, $default = '') use ($s) {
@@ -36,170 +37,178 @@ $cs   = isset($this->crowdsec) && is_array($this->crowdsec) ? $this->crowdsec : 
 <?php endif; ?>
 
 <form id="ts-form" onsubmit="return false;" novalidate>
-    <div class="row g-4">
-        <div class="col-lg-6">
-            <div class="card h-100">
-                <div class="card-header fw-semibold"><i class="fa-solid fa-toggle-on me-2"></i>Protection mode</div>
-                <div class="card-body">
-                    <select name="tiger.tigershield.mode" class="form-select">
-                        <option value="off"     <?= $mode === 'off' ? 'selected' : '' ?>>Off — shield disabled</option>
-                        <option value="learn"   <?= $mode === 'learn' ? 'selected' : '' ?>>Learn — log only, block nothing</option>
-                        <option value="enforce" <?= $mode === 'enforce' ? 'selected' : '' ?>>Enforce — actively block &amp; challenge</option>
-                    </select>
-                    <p class="text-body-secondary small mt-2 mb-0">The shield fails <strong>open</strong>: if anything goes wrong, requests are allowed, never dropped.</p>
-                </div>
-            </div>
+    <ul class="nav nav-tabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="ts-tab-mode-btn" data-bs-toggle="tab" data-bs-target="#ts-tab-mode" type="button" role="tab" aria-controls="ts-tab-mode" aria-selected="true"><i class="fa-solid fa-toggle-on me-2"></i>Protection mode</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="ts-tab-crowdsec-btn" data-bs-toggle="tab" data-bs-target="#ts-tab-crowdsec" type="button" role="tab" aria-controls="ts-tab-crowdsec" aria-selected="false"><i class="fa-solid fa-earth-americas me-2"></i>CrowdSec</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="ts-tab-ratelimit-btn" data-bs-toggle="tab" data-bs-target="#ts-tab-ratelimit" type="button" role="tab" aria-controls="ts-tab-ratelimit" aria-selected="false"><i class="fa-solid fa-gauge-high me-2"></i>Rate limiting</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="ts-tab-waf-btn" data-bs-toggle="tab" data-bs-target="#ts-tab-waf" type="button" role="tab" aria-controls="ts-tab-waf" aria-selected="false"><i class="fa-solid fa-filter-circle-xmark me-2"></i>Firewall</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="ts-tab-captcha-btn" data-bs-toggle="tab" data-bs-target="#ts-tab-captcha" type="button" role="tab" aria-controls="ts-tab-captcha" aria-selected="false"><i class="fa-solid fa-user-check me-2"></i>Captcha</button>
+        </li>
+    </ul>
+
+    <div class="tab-content border border-top-0 rounded-bottom p-4 mb-4">
+        <div class="tab-pane fade show active" id="ts-tab-mode" role="tabpanel" aria-labelledby="ts-tab-mode-btn">
+            <h2 class="h6 fw-semibold mb-3"><i class="fa-solid fa-toggle-on me-2 text-primary"></i>Protection mode</h2>
+            <div class="row"><div class="col-lg-8">
+                <select name="tiger.tigershield.mode" class="form-select">
+                    <option value="off"     <?= $mode === 'off' ? 'selected' : '' ?>>Off — shield disabled</option>
+                    <option value="learn"   <?= $mode === 'learn' ? 'selected' : '' ?>>Learn — log only, block nothing</option>
+                    <option value="enforce" <?= $mode === 'enforce' ? 'selected' : '' ?>>Enforce — actively block &amp; challenge</option>
+                </select>
+                <p class="text-body-secondary small mt-2 mb-0">The shield fails <strong>open</strong>: if anything goes wrong, requests are allowed, never dropped.</p>
+            </div></div>
         </div>
 
-        <div class="col-lg-6">
-            <div class="card h-100">
-                <div class="card-header fw-semibold"><i class="fa-solid fa-earth-americas me-2"></i>CrowdSec — malicious-IP blocking</div>
-                <div class="card-body">
-                    <div class="form-check form-switch mb-2">
-                        <input class="form-check-input" type="checkbox" role="switch" id="ts-cs" name="tiger.tigershield.crowdsec.enabled" value="1" <?= $get('crowdsec.enabled', '0') === '1' ? 'checked' : '' ?>>
-                        <label class="form-check-label" for="ts-cs">Block IPs on the CrowdSec community blocklist</label>
-                    </div>
-
-                    <?php if (!empty($cs['enabled'])): ?>
-                    <div class="small mb-2 d-flex flex-wrap gap-3">
-                        <span><i class="fa-solid fa-<?= !empty($cs['registered']) ? 'circle-check text-success' : 'circle-xmark text-body-secondary' ?> me-1"></i><?= !empty($cs['registered']) ? 'Registered' : 'Not registered' ?><?= !empty($cs['enrolled']) ? ' · console-enrolled' : '' ?></span>
-                        <span><i class="fa-solid fa-list me-1"></i><?= (int) ($cs['count'] ?? 0) ?> IPs cached</span>
-                        <span><i class="fa-solid fa-clock me-1"></i><?= !empty($cs['last_sync']) ? 'synced ' . date('Y-m-d H:i', (int) $cs['last_sync']) : 'not synced yet' ?></span>
-                    </div>
-                    <?php if (!empty($cs['last_error'])): ?><p class="text-warning small mb-2"><i class="fa-solid fa-triangle-exclamation me-1"></i><?= htmlspecialchars($cs['last_error']) ?></p><?php endif; ?>
-                    <?php endif; ?>
-
-                    <label class="form-label small mb-1">Enrollment key <span class="text-body-secondary">(optional — from your CrowdSec console)</span></label>
-                    <input type="text" name="crowdsec_enroll_key" class="form-control form-control-sm mb-2" autocomplete="off" placeholder="cccccccccccccccccccccccc" value="">
-
-                    <div class="form-check form-switch mb-2">
-                        <input class="form-check-input" type="checkbox" role="switch" id="ts-cs-contrib" name="tiger.tigershield.crowdsec.contribute" value="1" <?= $get('crowdsec.contribute', '0') === '1' ? 'checked' : '' ?>>
-                        <label class="form-check-label small" for="ts-cs-contrib">Share my detections back with the community (opt-in)</label>
-                    </div>
-                    <p class="text-body-secondary small mb-0">Crowd-sourced threat intel, pulled over the CrowdSec API and cached locally — no agent, no root, no SDK.</p>
+        <div class="tab-pane fade" id="ts-tab-crowdsec" role="tabpanel" aria-labelledby="ts-tab-crowdsec-btn">
+            <h2 class="h6 fw-semibold mb-3"><i class="fa-solid fa-earth-americas me-2 text-primary"></i>CrowdSec — malicious-IP blocking</h2>
+            <div class="row"><div class="col-lg-8">
+                <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" role="switch" id="ts-cs" name="tiger.tigershield.crowdsec.enabled" value="1" <?= $get('crowdsec.enabled', '0') === '1' ? 'checked' : '' ?>>
+                    <label class="form-check-label" for="ts-cs">Block IPs on the CrowdSec community blocklist</label>
                 </div>
-            </div>
+
+                <?php if (!empty($cs['enabled'])): ?>
+                <div class="small mb-2 d-flex flex-wrap gap-3">
+                    <span><i class="fa-solid fa-<?= !empty($cs['registered']) ? 'circle-check text-success' : 'circle-xmark text-body-secondary' ?> me-1"></i><?= !empty($cs['registered']) ? 'Registered' : 'Not registered' ?><?= !empty($cs['enrolled']) ? ' · console-enrolled' : '' ?></span>
+                    <span><i class="fa-solid fa-list me-1"></i><?= (int) ($cs['count'] ?? 0) ?> IPs cached</span>
+                    <span><i class="fa-solid fa-clock me-1"></i><?= !empty($cs['last_sync']) ? 'synced ' . date('Y-m-d H:i', (int) $cs['last_sync']) : 'not synced yet' ?></span>
+                </div>
+                <?php if (!empty($cs['last_error'])): ?><p class="text-warning small mb-2"><i class="fa-solid fa-triangle-exclamation me-1"></i><?= htmlspecialchars($cs['last_error']) ?></p><?php endif; ?>
+                <?php endif; ?>
+
+                <label class="form-label small mb-1">Enrollment key <span class="text-body-secondary">(optional — from your CrowdSec console)</span></label>
+                <input type="text" name="crowdsec_enroll_key" class="form-control form-control-sm mb-2" autocomplete="off" placeholder="cccccccccccccccccccccccc" value="">
+
+                <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" role="switch" id="ts-cs-contrib" name="tiger.tigershield.crowdsec.contribute" value="1" <?= $get('crowdsec.contribute', '0') === '1' ? 'checked' : '' ?>>
+                    <label class="form-check-label small" for="ts-cs-contrib">Share my detections back with the community (opt-in)</label>
+                </div>
+                <p class="text-body-secondary small mb-0">Crowd-sourced threat intel, pulled over the CrowdSec API and cached locally — no agent, no root, no SDK.</p>
+            </div></div>
         </div>
 
-        <div class="col-lg-6">
-            <div class="card h-100">
-                <div class="card-header fw-semibold"><i class="fa-solid fa-gauge-high me-2"></i>Rate limiting &amp; login protection</div>
-                <div class="card-body">
-                    <div class="form-check form-switch mb-0">
-                        <input class="form-check-input" type="checkbox" role="switch" id="ts-rl" name="tiger.tigershield.ratelimit.enabled" value="1" <?= $get('ratelimit.enabled', '1') === '1' ? 'checked' : '' ?>>
-                        <label class="form-check-label" for="ts-rl">Throttle abusive request rates &amp; brute-force logins</label>
-                    </div>
-                    <p class="text-body-secondary small mt-2 mb-0">Escalates throttle &rarr; captcha &rarr; block. Login limits build on Tiger's existing lockout + audit log.</p>
+        <div class="tab-pane fade" id="ts-tab-ratelimit" role="tabpanel" aria-labelledby="ts-tab-ratelimit-btn">
+            <h2 class="h6 fw-semibold mb-3"><i class="fa-solid fa-gauge-high me-2 text-primary"></i>Rate limiting &amp; login protection</h2>
+            <div class="row"><div class="col-lg-8">
+                <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" role="switch" id="ts-rl" name="tiger.tigershield.ratelimit.enabled" value="1" <?= $get('ratelimit.enabled', '1') === '1' ? 'checked' : '' ?>>
+                    <label class="form-check-label" for="ts-rl">Throttle abusive request rates &amp; brute-force logins</label>
                 </div>
-            </div>
+                <p class="text-body-secondary small mt-2 mb-0">Escalates throttle &rarr; captcha &rarr; block. Login limits build on Tiger's existing lockout + audit log.</p>
+            </div></div>
         </div>
 
-        <div class="col-lg-6">
-            <div class="card h-100">
-                <div class="card-header fw-semibold"><i class="fa-solid fa-filter-circle-xmark me-2"></i>Request firewall (WAF)</div>
-                <div class="card-body">
-                    <div class="form-check form-switch mb-2">
-                        <input class="form-check-input" type="checkbox" role="switch" id="ts-waf" name="tiger.tigershield.waf.enabled" value="1" <?= $get('waf.enabled', '1') === '1' ? 'checked' : '' ?>>
-                        <label class="form-check-label" for="ts-waf">Screen requests for injection / traversal / scanner patterns</label>
-                    </div>
-                    <label class="form-label small">When a high-confidence rule matches</label>
-                    <select name="tiger.tigershield.waf.action" class="form-select form-select-sm mb-3">
-                        <?php $wa = $get('waf.action', 'log'); foreach (['log' => 'Log only', 'captcha' => 'Challenge (captcha)', 'block' => 'Block'] as $v => $lbl): ?>
-                        <option value="<?= $v ?>" <?= $wa === $v ? 'selected' : '' ?>><?= $lbl ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                    <label class="form-label small mb-1">Rule categories</label>
-                    <?php
-                    $wafCats = [
-                        'files' => 'Sensitive-file probes', 'cms' => 'CMS/plugin probes', 'traversal' => 'Path traversal / LFI',
-                        'rce' => 'Command injection', 'nullbyte' => 'Null bytes / control chars', 'method' => 'Disallowed methods',
-                        'scanners' => 'Scanner user-agents', 'sqli' => 'SQL injection (log-only)', 'xss' => 'XSS (log-only)',
-                    ];
-                    foreach ($wafCats as $ck => $cl): ?>
-                    <div class="form-check form-switch mb-1">
-                        <input class="form-check-input" type="checkbox" role="switch" id="ts-wafcat-<?= $ck ?>" name="tiger.tigershield.waf.cat.<?= $ck ?>" value="1" <?= $get('waf.cat.' . $ck, '1') === '1' ? 'checked' : '' ?>>
-                        <label class="form-check-label small" for="ts-wafcat-<?= $ck ?>"><?= htmlspecialchars($cl) ?></label>
-                    </div>
+        <div class="tab-pane fade" id="ts-tab-waf" role="tabpanel" aria-labelledby="ts-tab-waf-btn">
+            <h2 class="h6 fw-semibold mb-3"><i class="fa-solid fa-filter-circle-xmark me-2 text-primary"></i>Request firewall (WAF)</h2>
+            <div class="row"><div class="col-lg-8">
+                <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" role="switch" id="ts-waf" name="tiger.tigershield.waf.enabled" value="1" <?= $get('waf.enabled', '1') === '1' ? 'checked' : '' ?>>
+                    <label class="form-check-label" for="ts-waf">Screen requests for injection / traversal / scanner patterns</label>
+                </div>
+                <label class="form-label small">When a high-confidence rule matches</label>
+                <select name="tiger.tigershield.waf.action" class="form-select form-select-sm mb-3">
+                    <?php $wa = $get('waf.action', 'log'); foreach (['log' => 'Log only', 'captcha' => 'Challenge (captcha)', 'block' => 'Block'] as $v => $lbl): ?>
+                    <option value="<?= $v ?>" <?= $wa === $v ? 'selected' : '' ?>><?= $lbl ?></option>
                     <?php endforeach; ?>
-                    <p class="form-text small mb-2">Soft heuristics (SQLi/XSS) only ever log — they never auto-block.</p>
-
-                    <hr class="my-3">
-                    <div class="form-check form-switch mb-1">
-                        <input class="form-check-input" type="checkbox" role="switch" id="ts-waf-body" name="tiger.tigershield.waf.body.enabled" value="1" <?= $get('waf.body.enabled', '0') === '1' ? 'checked' : '' ?>>
-                        <label class="form-check-label" for="ts-waf-body">Also scan POST-request bodies</label>
-                    </div>
-                    <p class="form-text small mb-2">Off by default — legit form fields carry rich content and are the main false-positive source. Turn on once you know your forms.</p>
-                    <label class="form-label small mb-1" for="ts-waf-body-skip">Fields to skip when scanning bodies</label>
-                    <input type="text" class="form-control form-control-sm mb-1" id="ts-waf-body-skip" name="tiger.tigershield.waf.body.skip" value="<?= htmlspecialchars($get('waf.body.skip', Tigershield_Service_Waf::DEFAULT_BODY_SKIP)) ?>" placeholder="body,content,message,description,…">
-                    <p class="form-text small mb-3">Comma-separated field names exempt from the body scan. Password / CSRF / captcha fields are always skipped.</p>
-
-                    <a href="/tigershield/admin/rules" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-list-check me-2"></i>Manage custom rules</a>
+                </select>
+                <label class="form-label small mb-1">Rule categories</label>
+                <?php
+                $wafCats = [
+                    'files' => 'Sensitive-file probes', 'cms' => 'CMS/plugin probes', 'traversal' => 'Path traversal / LFI',
+                    'rce' => 'Command injection', 'nullbyte' => 'Null bytes / control chars', 'method' => 'Disallowed methods',
+                    'scanners' => 'Scanner user-agents', 'sqli' => 'SQL injection (log-only)', 'xss' => 'XSS (log-only)',
+                ];
+                foreach ($wafCats as $ck => $cl): ?>
+                <div class="form-check form-switch mb-1">
+                    <input class="form-check-input" type="checkbox" role="switch" id="ts-wafcat-<?= $ck ?>" name="tiger.tigershield.waf.cat.<?= $ck ?>" value="1" <?= $get('waf.cat.' . $ck, '1') === '1' ? 'checked' : '' ?>>
+                    <label class="form-check-label small" for="ts-wafcat-<?= $ck ?>"><?= htmlspecialchars($cl) ?></label>
                 </div>
-            </div>
+                <?php endforeach; ?>
+                <p class="form-text small mb-2">Soft heuristics (SQLi/XSS) only ever log — they never auto-block.</p>
+
+                <hr class="my-3">
+                <div class="form-check form-switch mb-1">
+                    <input class="form-check-input" type="checkbox" role="switch" id="ts-waf-body" name="tiger.tigershield.waf.body.enabled" value="1" <?= $get('waf.body.enabled', '0') === '1' ? 'checked' : '' ?>>
+                    <label class="form-check-label" for="ts-waf-body">Also scan POST-request bodies</label>
+                </div>
+                <p class="form-text small mb-2">Off by default — legit form fields carry rich content and are the main false-positive source. Turn on once you know your forms.</p>
+                <label class="form-label small mb-1" for="ts-waf-body-skip">Fields to skip when scanning bodies</label>
+                <input type="text" class="form-control form-control-sm mb-1" id="ts-waf-body-skip" name="tiger.tigershield.waf.body.skip" value="<?= htmlspecialchars($get('waf.body.skip', Tigershield_Service_Waf::DEFAULT_BODY_SKIP)) ?>" placeholder="body,content,message,description,…">
+                <p class="form-text small mb-3">Comma-separated field names exempt from the body scan. Password / CSRF / captcha fields are always skipped.</p>
+
+                <a href="/tigershield/admin/rules" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-list-check me-2"></i>Manage custom rules</a>
+            </div></div>
         </div>
 
-        <div class="col-lg-6">
-            <div class="card h-100">
-                <div class="card-header fw-semibold"><i class="fa-solid fa-user-check me-2"></i>Captcha gating</div>
-                <div class="card-body">
-                    <?php
-                    $cap = isset($this->captcha) && is_array($this->captcha) ? $this->captcha : [];
-                    $rc  = isset($this->recaptcha) && is_array($this->recaptcha) ? $this->recaptcha : [];
-                    $rcV = (string) ($rc['version'] ?? 'v2');
-                    ?>
-                    <?php if (!empty($cap['available'])): ?>
-                    <p class="small mb-3"><i class="fa-solid fa-circle-check text-success me-1"></i>reCAPTCHA <?= htmlspecialchars($rcV) ?> is configured — a <em>challenge</em> verdict shows an interstitial instead of a flat block.</p>
-                    <?php else: ?>
-                    <p class="small text-body-secondary mb-3"><i class="fa-solid fa-circle-info me-1"></i>Set up <strong>reCAPTCHA</strong> below (or in <a href="/system/settings">System settings</a>) to gate suspicious visitors with a challenge instead of blocking them.</p>
-                    <?php endif; ?>
+        <div class="tab-pane fade" id="ts-tab-captcha" role="tabpanel" aria-labelledby="ts-tab-captcha-btn">
+            <h2 class="h6 fw-semibold mb-3"><i class="fa-solid fa-user-check me-2 text-primary"></i>Captcha gating</h2>
+            <div class="row"><div class="col-lg-8">
+                <?php
+                $cap = isset($this->captcha) && is_array($this->captcha) ? $this->captcha : [];
+                $rc  = isset($this->recaptcha) && is_array($this->recaptcha) ? $this->recaptcha : [];
+                $rcV = (string) ($rc['version'] ?? 'v2');
+                ?>
+                <?php if (!empty($cap['available'])): ?>
+                <p class="small mb-3"><i class="fa-solid fa-circle-check text-success me-1"></i>reCAPTCHA <?= htmlspecialchars($rcV) ?> is configured — a <em>challenge</em> verdict shows an interstitial instead of a flat block.</p>
+                <?php else: ?>
+                <p class="small text-body-secondary mb-3"><i class="fa-solid fa-circle-info me-1"></i>Set up <strong>reCAPTCHA</strong> below (or in <a href="/system/settings">System settings</a>) to gate suspicious visitors with a challenge instead of blocking them.</p>
+                <?php endif; ?>
 
-                    <?php if (empty($this->recaptchaManageable)): ?>
-                    <p class="small text-body-secondary mb-3"><i class="fa-solid fa-triangle-exclamation me-1"></i>Update the platform to manage reCAPTCHA keys here; for now configure them in <a href="/system/settings">System settings</a>.</p>
-                    <?php else: ?>
+                <?php if (empty($this->recaptchaManageable)): ?>
+                <p class="small text-body-secondary mb-3"><i class="fa-solid fa-triangle-exclamation me-1"></i>Update the platform to manage reCAPTCHA keys here; for now configure them in <a href="/system/settings">System settings</a>.</p>
+                <?php else: ?>
 
-                    <div class="form-check form-switch mb-2">
-                        <input class="form-check-input" type="checkbox" role="switch" id="ts-rc-enabled" name="recaptcha_enabled" value="1" <?= !empty($rc['enabled']) ? 'checked' : '' ?>>
-                        <label class="form-check-label" for="ts-rc-enabled">Enable reCAPTCHA</label>
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label small mb-1" for="ts-rc-version">Version</label>
-                        <select id="ts-rc-version" name="recaptcha_version" class="form-select form-select-sm">
-                            <option value="v2" <?= $rcV === 'v2' ? 'selected' : '' ?>>v2 — checkbox</option>
-                            <option value="v3" <?= $rcV === 'v3' ? 'selected' : '' ?>>v3 — invisible score</option>
-                        </select>
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label small mb-1" for="ts-rc-site">Site key <span class="text-body-secondary">(public)</span></label>
-                        <input type="text" id="ts-rc-site" name="recaptcha_site_key" class="form-control form-control-sm" autocomplete="off" value="<?= htmlspecialchars((string) ($rc['site_key'] ?? '')) ?>">
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label small mb-1" for="ts-rc-secret">Secret key <span class="text-body-secondary">(encrypted)</span></label>
-                        <input type="password" id="ts-rc-secret" name="recaptcha_secret_key" class="form-control form-control-sm" autocomplete="new-password" placeholder="<?= !empty($rc['has_secret']) ? '•••••••• — leave blank to keep' : 'Paste your secret key' ?>">
-                    </div>
-                    <fieldset id="ts-rc-v3" class="border rounded p-2 mb-2 <?= $rcV === 'v3' ? '' : 'd-none' ?>">
-                        <div class="mb-2">
-                            <label class="form-label small mb-1" for="ts-rc-score">Min score (0–1)</label>
-                            <input type="text" id="ts-rc-score" name="recaptcha_min_score" class="form-control form-control-sm" style="max-width:8rem" inputmode="decimal" value="<?= htmlspecialchars((string) ($rc['min_score'] ?? '0.5')) ?>">
-                        </div>
-                        <div class="form-check form-switch mb-0">
-                            <input class="form-check-input" type="checkbox" role="switch" id="ts-rc-hidebadge" name="recaptcha_hide_badge" value="1" <?= !empty($rc['hide_badge']) ? 'checked' : '' ?>>
-                            <label class="form-check-label small" for="ts-rc-hidebadge">Hide the reCAPTCHA badge <span class="text-body-secondary">(adds the required legal notice)</span></label>
-                        </div>
-                    </fieldset>
-                    <div class="form-check form-switch mb-3">
-                        <input class="form-check-input" type="checkbox" role="switch" id="ts-rc-failopen" name="recaptcha_fail_open" value="1" <?= !empty($rc['fail_open']) ? 'checked' : '' ?>>
-                        <label class="form-check-label small" for="ts-rc-failopen">Fail open on a reCAPTCHA outage</label>
-                    </div>
-                    <?php endif; ?>
-
-                    <label class="form-label small">When no captcha is available, a challenge verdict should</label>
-                    <select name="tiger.tigershield.captcha.fallback" class="form-select form-select-sm">
-                        <?php $cf = $get('captcha.fallback', 'allow'); foreach (['allow' => 'Allow the request (fail open)', 'block' => 'Block the request'] as $v => $lbl): ?>
-                        <option value="<?= $v ?>" <?= $cf === $v ? 'selected' : '' ?>><?= $lbl ?></option>
-                        <?php endforeach; ?>
+                <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" role="switch" id="ts-rc-enabled" name="recaptcha_enabled" value="1" <?= !empty($rc['enabled']) ? 'checked' : '' ?>>
+                    <label class="form-check-label" for="ts-rc-enabled">Enable reCAPTCHA</label>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small mb-1" for="ts-rc-version">Version</label>
+                    <select id="ts-rc-version" name="recaptcha_version" class="form-select form-select-sm">
+                        <option value="v2" <?= $rcV === 'v2' ? 'selected' : '' ?>>v2 — checkbox</option>
+                        <option value="v3" <?= $rcV === 'v3' ? 'selected' : '' ?>>v3 — invisible score</option>
                     </select>
                 </div>
-            </div>
+                <div class="mb-2">
+                    <label class="form-label small mb-1" for="ts-rc-site">Site key <span class="text-body-secondary">(public)</span></label>
+                    <input type="text" id="ts-rc-site" name="recaptcha_site_key" class="form-control form-control-sm" autocomplete="off" value="<?= htmlspecialchars((string) ($rc['site_key'] ?? '')) ?>">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small mb-1" for="ts-rc-secret">Secret key <span class="text-body-secondary">(encrypted)</span></label>
+                    <input type="password" id="ts-rc-secret" name="recaptcha_secret_key" class="form-control form-control-sm" autocomplete="new-password" placeholder="<?= !empty($rc['has_secret']) ? '•••••••• — leave blank to keep' : 'Paste your secret key' ?>">
+                </div>
+                <fieldset id="ts-rc-v3" class="border rounded p-2 mb-2 <?= $rcV === 'v3' ? '' : 'd-none' ?>">
+                    <div class="mb-2">
+                        <label class="form-label small mb-1" for="ts-rc-score">Min score (0–1)</label>
+                        <input type="text" id="ts-rc-score" name="recaptcha_min_score" class="form-control form-control-sm" style="max-width:8rem" inputmode="decimal" value="<?= htmlspecialchars((string) ($rc['min_score'] ?? '0.5')) ?>">
+                    </div>
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" role="switch" id="ts-rc-hidebadge" name="recaptcha_hide_badge" value="1" <?= !empty($rc['hide_badge']) ? 'checked' : '' ?>>
+                        <label class="form-check-label small" for="ts-rc-hidebadge">Hide the reCAPTCHA badge <span class="text-body-secondary">(adds the required legal notice)</span></label>
+                    </div>
+                </fieldset>
+                <div class="form-check form-switch mb-3">
+                    <input class="form-check-input" type="checkbox" role="switch" id="ts-rc-failopen" name="recaptcha_fail_open" value="1" <?= !empty($rc['fail_open']) ? 'checked' : '' ?>>
+                    <label class="form-check-label small" for="ts-rc-failopen">Fail open on a reCAPTCHA outage</label>
+                </div>
+                <?php endif; ?>
+
+                <label class="form-label small">When no captcha is available, a challenge verdict should</label>
+                <select name="tiger.tigershield.captcha.fallback" class="form-select form-select-sm">
+                    <?php $cf = $get('captcha.fallback', 'allow'); foreach (['allow' => 'Allow the request (fail open)', 'block' => 'Block the request'] as $v => $lbl): ?>
+                    <option value="<?= $v ?>" <?= $cf === $v ? 'selected' : '' ?>><?= $lbl ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div></div>
         </div>
     </div>
 </form>
