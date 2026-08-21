@@ -5,6 +5,20 @@ this project uses [SemVer](https://semver.org) with a `-beta` stability suffix.
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-08-21
+
+### Added
+- **Full localization.** TigerShield now ships its OWN translations for **es, pt (pt-BR), hi (Devanagari),
+  de, and fr** (alongside en) — the admin UI and the security dashboard widget render in the active locale.
+  Autonomous modules own their i18n.
+
+### Fixed
+- **Dashboard widget was English-only + leaked a raw key.** The Shield widget hardcoded every body string
+  (mode, table titles/headers, "No data yet.", the events-flagged line) in `render()`, and its title showed
+  the raw `tigershield.dashboard.title` key on non-English admins. Every label now routes through the
+  translator via owner-namespaced `tigershield.*` keys, with an active→en→key fallback so it never shows a key.
+
+
 ## [0.7.0-beta] — 2026-07-17
 
 ### Added
