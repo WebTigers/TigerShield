@@ -94,17 +94,28 @@ class Tigershield_Widget_Shield
     /** The card BODY — the WordFence-style "security is working" tables. Themed Bootstrap (light/dark). */
     public function render(): string
     {
+        // Widgets aren't views: pull the registered translator directly, fail-soft to the key. All
+        // user-facing strings are owner-namespaced tigershield.* keys (the module ships every locale;
+        // core never falls back for us).
+        $tr = Zend_Registry::isRegistered('Zend_Translate') ? Zend_Registry::get('Zend_Translate') : null;
+        // Active locale → source (en) fallback → key, so a missing locale degrades to English, never a raw key.
+        $t  = function ($k) use ($tr) {
+            if (!$tr) { return $k; }
+            if ($tr->isTranslated($k)) { return $tr->translate($k); }
+            return $tr->isTranslated($k, false, 'en') ? $tr->translate($k, 'en') : $k;
+        };
+
         $d    = $this->data();
         $tone = $d['mode'] === 'enforce' ? 'success' : ($d['mode'] === 'off' ? 'secondary' : 'warning');
-        $mode = htmlspecialchars(ucfirst($d['mode']), ENT_QUOTES);
-        $cs   = $d['crowdsec'] === 'on' ? 'On' : 'Off';
+        $mode = htmlspecialchars($t('tigershield.mode.' . $d['mode']), ENT_QUOTES);
+        $cs   = htmlspecialchars($t($d['crowdsec'] === 'on' ? 'tigershield.widget.on' : 'tigershield.widget.off'), ENT_QUOTES);
 
         $h  = self::_style()
             . '<div class="d-flex justify-content-between align-items-center small mb-2">'
-            . '<span><strong>Mode:</strong> <span class="text-' . $tone . '">' . $mode . '</span></span>'
-            . '<span class="text-body-secondary">CrowdSec: ' . $cs . '</span></div>'
-            . '<p class="small text-body-secondary mb-3"><strong class="text-body">' . (int) $d['flagged']
-            . '</strong> events flagged in the last 7 days.</p>';
+            . '<span><strong>' . htmlspecialchars($t('tigershield.widget.mode_label')) . '</strong> <span class="text-' . $tone . '">' . $mode . '</span></span>'
+            . '<span class="text-body-secondary">' . htmlspecialchars($t('tigershield.widget.crowdsec')) . ': ' . $cs . '</span></div>'
+            . '<p class="small text-body-secondary mb-3">'
+            . sprintf($t('tigershield.widget.events_flagged'), '<strong class="text-body">' . (int) $d['flagged'] . '</strong>') . '</p>';
 
         // Top offending IPs — always shown (empty-state row when there's nothing yet).
         $rows = '';
@@ -113,7 +124,8 @@ class Tigershield_Widget_Shield
                    . ($r['country'] !== '' ? '<span class="badge text-bg-light text-uppercase">' . htmlspecialchars($r['country'], ENT_QUOTES) . '</span>' : '<span class="text-body-secondary">—</span>')
                    . '</td><td class="text-end">' . (int) $r['hits'] . '</td></tr>';
         }
-        $h .= self::_table('Top offending IPs', '<tr><th>IP</th><th>Country</th><th class="text-end">Hits</th></tr>', $rows ?: self::_empty(3));
+        $thead = '<tr><th>' . htmlspecialchars($t('tigershield.widget.col_ip')) . '</th><th>' . htmlspecialchars($t('tigershield.widget.col_country')) . '</th><th class="text-end">' . htmlspecialchars($t('tigershield.widget.col_hits')) . '</th></tr>';
+        $h .= self::_table($t('tigershield.widget.top_ips'), $thead, $rows ?: self::_empty(3, $t('tigershield.widget.no_data')));
 
         // Top countries — always shown.
         $rows = '';
@@ -121,18 +133,22 @@ class Tigershield_Widget_Shield
             $rows .= '<tr><td><span class="badge text-bg-light text-uppercase">' . htmlspecialchars($r['country'], ENT_QUOTES)
                    . '</span></td><td class="text-end">' . (int) $r['hits'] . '</td></tr>';
         }
-        $h .= self::_table('Top countries', '<tr><th>Country</th><th class="text-end">Hits</th></tr>', $rows ?: self::_empty(2));
+        $thead = '<tr><th>' . htmlspecialchars($t('tigershield.widget.col_country')) . '</th><th class="text-end">' . htmlspecialchars($t('tigershield.widget.col_hits')) . '</th></tr>';
+        $h .= self::_table($t('tigershield.widget.top_countries'), $thead, $rows ?: self::_empty(2, $t('tigershield.widget.no_data')));
 
         // Top targeted logins — always shown.
         $rows = '';
         foreach ($d['top_failed'] as $r) {
-            $ex = !empty($r['existing']) ? '<span class="text-success">Yes</span>' : '<span class="text-danger">No</span>';
+            $ex = !empty($r['existing'])
+                ? '<span class="text-success">' . htmlspecialchars($t('tigershield.widget.yes')) . '</span>'
+                : '<span class="text-danger">' . htmlspecialchars($t('tigershield.widget.no')) . '</span>';
             $rows .= '<tr><td class="text-truncate" style="max-width:9rem">' . htmlspecialchars($r['identifier'], ENT_QUOTES)
                    . '</td><td class="text-end">' . (int) $r['attempts'] . '</td><td class="text-center">' . $ex . '</td></tr>';
         }
-        $h .= self::_table('Top targeted logins', '<tr><th>Account</th><th class="text-end">Tries</th><th class="text-center">Real?</th></tr>', $rows ?: self::_empty(3));
+        $thead = '<tr><th>' . htmlspecialchars($t('tigershield.widget.col_account')) . '</th><th class="text-end">' . htmlspecialchars($t('tigershield.widget.col_tries')) . '</th><th class="text-center">' . htmlspecialchars($t('tigershield.widget.col_real')) . '</th></tr>';
+        $h .= self::_table($t('tigershield.widget.top_logins'), $thead, $rows ?: self::_empty(3, $t('tigershield.widget.no_data')));
 
-        $h .= '<a href="/tigershield/admin/events" class="small text-decoration-none">View live traffic &rarr;</a>';
+        $h .= '<a href="/tigershield/admin/events" class="small text-decoration-none">' . htmlspecialchars($t('tigershield.dashboard.traffic')) . ' &rarr;</a>';
         return '<div class="tigershield-widget">' . $h . '</div>';
     }
 
@@ -143,10 +159,10 @@ class Tigershield_Widget_Shield
              . '<table class="table table-sm small mb-0"><thead>' . $thead . '</thead><tbody>' . $rows . '</tbody></table></div>';
     }
 
-    /** An empty-state table row spanning $cols columns. */
-    private static function _empty(int $cols): string
+    /** An empty-state table row spanning $cols columns ($text is the localized "no data" message). */
+    private static function _empty(int $cols, string $text): string
     {
-        return '<tr><td colspan="' . $cols . '" class="text-center text-body-secondary py-2">No data yet.</td></tr>';
+        return '<tr><td colspan="' . $cols . '" class="text-center text-body-secondary py-2">' . htmlspecialchars($text) . '</td></tr>';
     }
 
     /** Scoped header styling — WordFence-style filled, uppercase table heads that adapt to the theme. */
