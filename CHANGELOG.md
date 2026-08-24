@@ -5,6 +5,15 @@ this project uses [SemVer](https://semver.org) with a `-beta` stability suffix.
 
 ## [Unreleased]
 
+## [1.0.0] — 2026-08-24
+
+**1.0** — the WAF ships stable.
+
+### Changed
+- Version is now `1.0.0` (was `0.8.0`). No behaviour change; Tiger itself reached 1.0 and the module
+  line follows.
+- Ships the full six-locale UI (en/es/pt/hi/de/fr), dashboard widget included.
+
 ## [0.8.0] — 2026-08-21
 
 ### Added
