@@ -48,4 +48,8 @@ return [
     'tigershield.widget.yes'            => 'Sí',
     'tigershield.widget.no'             => 'No',
     'tigershield.widget.no_data'        => 'Aún no hay datos.',
+
+    // The marketplace listing blurb. Pulled into the public directory by TigerVendors at the
+    // pinned ref, so this file stays the one place this module's copy is translated.
+    'tigershield.listing.description'        => 'Un cortafuegos de aplicaciones web a nivel de plugin para Tiger: bloqueo de IP maliciosas con CrowdSec, protección de inicio de sesión y fuerza bruta, limitación de tasa, un WAF de peticiones y desafíos captcha, todo en la capa PHP sin root ni demonio. Diseñado para alojamiento compartido.',
 ];

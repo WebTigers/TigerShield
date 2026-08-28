@@ -48,4 +48,8 @@ return [
     'tigershield.widget.yes'            => 'हाँ',
     'tigershield.widget.no'             => 'नहीं',
     'tigershield.widget.no_data'        => 'अभी तक कोई डेटा नहीं।',
+
+    // The marketplace listing blurb. Pulled into the public directory by TigerVendors at the
+    // pinned ref, so this file stays the one place this module's copy is translated.
+    'tigershield.listing.description'        => 'Tiger के लिए प्लगइन-स्तर का वेब एप्लिकेशन फ़ायरवॉल — CrowdSec दुर्भावनापूर्ण-IP अवरोधन, लॉगिन/ब्रूट-फ़ोर्स सुरक्षा, दर सीमा, अनुरोध WAF और कैप्चा चुनौतियाँ, सब कुछ PHP परत पर, बिना root या डेमॉन के। साझा होस्टिंग के लिए बनाया गया।',
 ];
