@@ -1,0 +1,46 @@
+name: tests
+
+# TigerShield's suite is unit-only (no DB): the WAF service reads its config from the registry and
+# its rules from a file, so there is nothing to provision. Dependencies (Tiger_*, Zend_* via tigerzf,
+# PHPUnit) come from a sibling tiger-core checkout, which the test bootstrap resolves.
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+
+jobs:
+  phpunit:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        php: [ '8.1', '8.4' ]
+
+    steps:
+      - name: Checkout TigerShield
+        uses: actions/checkout@v4
+        with:
+          path: TigerShield
+
+      # tiger-core is public (BSD-3); no token needed.
+      - name: Checkout tiger-core (test dependencies)
+        uses: actions/checkout@v4
+        with:
+          repository: WebTigers/TigerCore
+          path: tiger-core
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring
+          coverage: none
+
+      - name: Install tiger-core dev dependencies
+        working-directory: tiger-core
+        run: composer install --no-interaction --no-progress
+
+      - name: Run PHPUnit
+        working-directory: TigerShield
+        run: ../tiger-core/vendor/bin/phpunit -c phpunit.xml
