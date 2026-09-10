@@ -1,0 +1,28 @@
+name: Version check
+
+# Guard the source of truth: module.json "version" must equal the release tag.
+#
+# Tiger_Update_Checker compares the version RECORDED AT INSTALL (which comes from this manifest)
+# against the newest tag on GitHub. If the two disagree, an update can never satisfy itself: the
+# update applies correctly, records the manifest's older version, and the module goes on advertising
+# the same update forever. That is not a hypothetical — TigerShield, TigerDocs and TigerSSL all
+# shipped v1.0.1 with a 1.0.0 manifest and sat in a permanent "update available" loop until 1.0.2.
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  version-matches-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assert module.json version == tag
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          VER="$(python3 -c "import json;print(json.load(open('module.json'))['version'])")"
+          echo "tag=$TAG   module.json=$VER"
+          if [ "$TAG" != "$VER" ]; then
+            echo "::error file=module.json::module.json version ($VER) does not match the release tag ($TAG). Bump it before tagging, or the update check will offer an update that can never complete."
+            exit 1
+          fi
+          echo "✓ module.json matches the tag."
