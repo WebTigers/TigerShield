@@ -45,27 +45,62 @@ class Tigershield_Service_Waf
         $surface   = $this->_surface($request, $needBody);
         $wafAction = $this->_config('waf.action', 'log');
 
+        // STRONGEST action wins, not first match.
+        //
+        // This used to return on the first shipped hit, so an ADVISORY match could mask enforcement:
+        // a soft category is capped at 'log', and waf.action itself defaults to 'log', while custom
+        // admin rules were only evaluated if nothing shipped had matched at all. A request that
+        // matched both a shipped heuristic AND an administrator's custom block rule was therefore
+        // ALLOWED — the weaker, observe-only verdict shadowed the policy that said block.
+        //
+        // Advisory rules must inform, never mask. Everything is evaluated and the highest-ranked
+        // action is returned (log < captcha < block), keeping the label of whichever rule produced
+        // it. Learn/off mode and the fail-open behaviour are untouched: they are decided downstream
+        // in the firewall plugin, which still never enforces a 'log'.
+        $verdict = null;
+        $take = function ($label, $action) use (&$verdict) {
+            $action = $this->_norm($action);
+            $rank   = self::_rank($action);
+            if ($verdict === null || $rank > $verdict['rank']) {
+                $verdict = ['label' => (string) $label, 'action' => $action, 'rank' => $rank];
+            }
+            return $rank >= self::_rank('block');   // nothing outranks a block — safe to stop early
+        };
+
         // Shipped ruleset — each category against its surface, plus the body for content categories.
         foreach ($this->_rules() as $key => $cat) {
             if (!$this->_categoryEnabled($key)) { continue; }
             $soft = ($cat['tier'] ?? 'high') === 'soft';
+            $act  = $soft ? 'log' : $wafAction;
             if ($this->_matchNeedles($cat, $surface[$cat['in'] ?? 'path'] ?? '')) {
-                return ['label' => (string) ($cat['label'] ?? $key), 'action' => $this->_norm($soft ? 'log' : $wafAction)];
+                if ($take((string) ($cat['label'] ?? $key), $act)) { break; }
             }
             if ($needBody && !empty($cat['body']) && isset($surface['body']) && $this->_matchNeedles($cat, $surface['body'])) {
-                return ['label' => (string) ($cat['label'] ?? $key) . ' (body)', 'action' => $this->_norm($soft ? 'log' : $wafAction)];
+                if ($take((string) ($cat['label'] ?? $key) . ' (body)', $act)) { break; }
             }
         }
 
-        // Custom admin rules (from the compiled cache) — each carries its own action.
-        foreach ($custom as $r) {
-            $val = $surface[$r['target'] ?? 'query'] ?? '';
-            if ($val === '') { continue; }
-            if ($this->_matchPattern($r['match'] ?? 'contains', (string) ($r['pattern'] ?? ''), $val)) {
-                return ['label' => (string) ($r['label'] ?? 'custom') . ' (custom)', 'action' => $this->_norm($r['action'] ?? 'log')];
+        // Custom admin rules — now ALWAYS evaluated unless a block is already certain.
+        if ($verdict === null || $verdict['rank'] < self::_rank('block')) {
+            foreach ($custom as $r) {
+                $val = $surface[$r['target'] ?? 'query'] ?? '';
+                if ($val === '') { continue; }
+                if ($this->_matchPattern($r['match'] ?? 'contains', (string) ($r['pattern'] ?? ''), $val)) {
+                    if ($take((string) ($r['label'] ?? 'custom') . ' (custom)', $r['action'] ?? 'log')) { break; }
+                }
             }
         }
-        return null;
+
+        if ($verdict === null) { return null; }
+        unset($verdict['rank']);
+        return $verdict;
+    }
+
+    /** Enforcement strength. A weaker verdict must never displace a stronger one. */
+    private static function _rank($action)
+    {
+        $ranks = ['log' => 0, 'captcha' => 1, 'block' => 2];
+        return $ranks[$action] ?? 0;
     }
 
     // -- internals -----------------------------------------------------------------------------------
