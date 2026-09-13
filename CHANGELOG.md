@@ -3,6 +3,11 @@
 All notable changes to TigerShield. Format follows [Keep a Changelog](https://keepachangelog.com);
 this project uses [SemVer](https://semver.org) with a `-beta` stability suffix.
 
+## [1.0.4] — 2026-09-13
+
+### Changed
+- README: replaced a stale "early beta" label with a description of what the module does; the release page now shows the corrected README.
+
 ## [Unreleased]
 
 ## [1.0.0] — 2026-08-24
