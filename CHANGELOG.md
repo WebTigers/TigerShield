@@ -3,6 +3,11 @@
 All notable changes to TigerShield. Format follows [Keep a Changelog](https://keepachangelog.com);
 this project uses [SemVer](https://semver.org) with a `-beta` stability suffix.
 
+## [1.0.5] — 2026-09-13
+
+### Changed
+- AGENTS.md: Step 0 — grep tiger-core/CAPABILITIES.md before building anything; core probably already has it.
+
 ## [1.0.4] — 2026-09-13
 
 ### Changed
