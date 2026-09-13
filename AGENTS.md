@@ -1,5 +1,11 @@
 # AGENTS.md — TigerShield
 
+> **Step 0 — check core before you build.** Before writing any mechanism, grep
+> [`../tiger-core/CAPABILITIES.md`](../tiger-core/CAPABILITIES.md) — a generated, CI-checked index of every `Tiger_*` class and module.
+> Core probably already has it. TigerImage once reimplemented `Tiger_View_Helper_I18n` by hand because this
+> hop was skipped, and lost a property core had designed in. **Assume a capability exists until you have
+> grepped the index and confirmed it doesn't.**
+
 Orientation for AI agents (and humans) working in this repo. Read this first, then
 [`FEATURES.md`](FEATURES.md) — the design-of-record. If you change a decision, update FEATURES.md in the
 same change; the "why" is the most perishable part.
