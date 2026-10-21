@@ -11,7 +11,7 @@ class Tigershield_Service_Rules extends Tiger_Service_Service
     /** DataTables grid of custom rules. */
     public function datatable(array $params): void
     {
-        if (!$this->_isAdmin()) { $this->_error('core.api.error.not_allowed'); return; }
+        if (!$this->_isAllowed('datatable')) { $this->_error('core.api.error.not_allowed'); return; }
         $dt   = $this->_dtParams($params);
         $data = (new Tigershield_Model_Rule())->datatable(['search' => $dt['search'], 'offset' => $dt['start'], 'limit' => $dt['length']]);
         $rows = [];
@@ -28,7 +28,7 @@ class Tigershield_Service_Rules extends Tiger_Service_Service
     /** Create or update a rule (rule_id present = update). Validates, then recompiles the cache. */
     public function save(array $params): void
     {
-        if (!$this->_isAdmin()) { $this->_error('core.api.error.not_allowed'); return; }
+        if (!$this->_isAllowed('save')) { $this->_error('core.api.error.not_allowed'); return; }
 
         $label   = trim((string) ($params['label'] ?? ''));
         $target  = (string) ($params['target'] ?? 'query');
@@ -70,7 +70,7 @@ class Tigershield_Service_Rules extends Tiger_Service_Service
     /** Flip a single rule's enabled flag (inline switch), then recompile the cache. */
     public function toggle(array $params): void
     {
-        if (!$this->_isAdmin()) { $this->_error('core.api.error.not_allowed'); return; }
+        if (!$this->_isAllowed('toggle')) { $this->_error('core.api.error.not_allowed'); return; }
         $id = trim((string) ($params['rule_id'] ?? ''));
         if ($id === '') { $this->_error('core.api.error.general'); return; }
         $enabled = !empty($params['enabled']) ? 1 : 0;
@@ -87,7 +87,7 @@ class Tigershield_Service_Rules extends Tiger_Service_Service
     /** Soft-delete a rule, then recompile the cache. */
     public function delete(array $params): void
     {
-        if (!$this->_isAdmin()) { $this->_error('core.api.error.not_allowed'); return; }
+        if (!$this->_isAllowed('delete')) { $this->_error('core.api.error.not_allowed'); return; }
         $id = trim((string) ($params['rule_id'] ?? ''));
         if ($id === '') { $this->_error('core.api.error.general'); return; }
         try {

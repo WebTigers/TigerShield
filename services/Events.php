@@ -10,7 +10,7 @@ class Tigershield_Service_Events extends Tiger_Service_Service
     /** DataTables server-side grid of recent shield events (live traffic). */
     public function datatable(array $params): void
     {
-        if (!$this->_isAdmin()) { $this->_error('core.api.error.not_allowed'); return; }
+        if (!$this->_isAllowed('datatable')) { $this->_error('core.api.error.not_allowed'); return; }
 
         $dt      = $this->_dtParams($params);
         $actions = ['observed', 'block', 'captcha', 'captcha_pass', 'allow'];

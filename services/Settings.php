@@ -13,7 +13,7 @@ class Tigershield_Service_Settings extends Tiger_Service_Service
     /** Persist the settings form. */
     public function save(array $params): void
     {
-        if (!$this->_isAdmin()) { $this->_error('core.api.error.not_allowed'); return; }
+        if (!$this->_isAllowed('save')) { $this->_error('core.api.error.not_allowed'); return; }
 
         // TODO: $form = new Tigershield_Form_Settings(); validate; then persist each key.
         // Scaffold: accept the known keys and write them to the config tier.
