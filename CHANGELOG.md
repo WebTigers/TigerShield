@@ -1,7 +1,12 @@
 # Changelog
 
 All notable changes to TigerShield. Format follows [Keep a Changelog](https://keepachangelog.com);
-this project uses [SemVer](https://semver.org) with a `-beta` stability suffix.
+this project uses [SemVer](https://semver.org).
+
+## [1.0.7] — 2026-11-13
+
+### Changed
+- Requires Tiger >= 1.0.0 (was `>=0.8.0-beta`); dropped the leftover "beta" status wording from FEATURES.md and this changelog's header.
 
 ## [1.0.5] — 2026-09-13
 
