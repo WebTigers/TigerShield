@@ -4,7 +4,7 @@
 blocking (CrowdSec), captcha gating, rate-limiting, and login protection — all at the PHP layer, with
 no root and no daemon. One integrated shield instead of a stack of plugins.*
 
-> **Status: v1 built (v0.6.0-beta).** All six build phases have shipped: the fail-open front-controller
+> **Status: 1.x.** All six build phases have shipped: the fail-open front-controller
 > gate (learn mode), login protection + rate limiting, the CrowdSec CAPI client + cached blocklist,
 > captcha gating, the request WAF (v1 + custom rules + opt-in body scanning), the admin Security screen +
 > Live Traffic, and the dashboard shield card. Remaining items are explicitly deferred (§16: per-row

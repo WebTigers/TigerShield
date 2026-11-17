@@ -40,7 +40,7 @@ requests are allowed, never dropped. A kill-switch (and a break-glass file) can 
 
 ## Requirements
 
-- Tiger ≥ 0.8.0-beta, PHP ≥ 8.1 (see [`module.json`](module.json)).
+- Tiger ≥ 1.0.0, PHP ≥ 8.1 (see [`module.json`](module.json)).
 
 ## License
 

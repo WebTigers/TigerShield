@@ -15,13 +15,29 @@
 class Tigershield_Bootstrap extends Zend_Application_Module_Bootstrap
 {
     /**
-     * Register the firewall gate. A LOW stack index so it runs early — before the ACL gate — since a
-     * banned IP should never reach dispatch at all. Fail-open, so registering it can't break boot.
+     * Register the firewall gate. It decides in routeStartup, which every plugin runs before ANY of them
+     * reaches routeShutdown/preDispatch (where the ACL gate lives), so a banned IP never reaches dispatch
+     * whatever its stack slot.
      */
     protected function _initFirewall()
     {
         $this->bootstrap('frontController');
-        Zend_Controller_Front::getInstance()->registerPlugin(new Tigershield_Plugin_Firewall(), 5);
+        self::registerFirewall(Zend_Controller_Front::getInstance());
+    }
+
+    /**
+     * Put the firewall plugin on the front controller in the next FREE stack slot. It used to pin slot 5,
+     * but plugins registered without an index fill 0,1,2,… in module-load order, so once six had loaded
+     * before TigerShield (an install with Shop, Hosting, Affiliates, …) slot 5 was taken and Zend threw
+     * "Plugin with stackIndex 5 already registered" — a fatal at boot, on every request. Idempotent.
+     *
+     * @param  Zend_Controller_Front $front
+     * @return void
+     */
+    public static function registerFirewall(Zend_Controller_Front $front): void
+    {
+        if ($front->hasPlugin('Tigershield_Plugin_Firewall')) { return; }
+        $front->registerPlugin(new Tigershield_Plugin_Firewall());
     }
 
     /** Contribute the TigerShield page to the admin Settings tree (ACL-gated in the menu). */
