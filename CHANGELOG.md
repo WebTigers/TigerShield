@@ -3,6 +3,15 @@
 All notable changes to TigerShield. Format follows [Keep a Changelog](https://keepachangelog.com);
 this project uses [SemVer](https://semver.org).
 
+## [1.0.8] — 2026-11-17
+
+### Fixed
+- **Boot fatal on installs with several plugin-registering modules.** The firewall plugin pinned front-controller
+  stack slot 5, but plugins registered without an index fill 0, 1, 2… in module-load order — so once six had loaded
+  before TigerShield, Zend threw `Plugin with stackIndex "5" already registered` and every request returned 500. It
+  now takes the next free slot. It still decides in `routeStartup`, which runs before any plugin's ACL hook, so a
+  blocked IP still never reaches dispatch.
+
 ## [1.0.7] — 2026-11-13
 
 ### Changed
